@@ -8,6 +8,9 @@
 #
 # Third-party actions and tool images are pinned to a commit or digest (the
 # version in the comment); bump both together.
+#
+# Checkouts don't keep the job token in .git/config (persist-credentials:
+# false): no step pushes, and the secret scan would report the token.
 
 name: ci
 
@@ -47,6 +50,8 @@ jobs:
       DATABASE_URL_TEST: postgres://tracker:tracker@localhost:5432/tracker_test?sslmode=disable
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
@@ -86,6 +91,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: gitleaks
         run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 detect --no-git --source /repo --redact
       - name: trufflehog
@@ -97,6 +104,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: reuse lint
         run: docker run --rm -v "$PWD:/data:ro" fsfe/reuse:5.0.2@sha256:000c3fc0c3e39e95b36fa9966d0104ae0496571b7de7b9f0c889a66438581bda lint
 
@@ -105,6 +114,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: smoke test the docker compose stack
         run: scripts/compose-smoke.sh
 
@@ -113,6 +124,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: build linux/amd64 and linux/arm64
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2

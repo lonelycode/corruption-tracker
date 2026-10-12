@@ -159,22 +159,35 @@ var vettedLicences = map[string]string{
 	"golang.org/x/crypto":                    "BSD-3-Clause",
 	"golang.org/x/net":                       "BSD-3-Clause",
 	"golang.org/x/sync":                      "BSD-3-Clause",
+	"golang.org/x/sys":                       "BSD-3-Clause",
 	"golang.org/x/text":                      "BSD-3-Clause",
 	"gopkg.in/yaml.v3":                       "MIT AND Apache-2.0",
 }
 
+// licencePlatforms are the targets whose dependency sets the licence check
+// covers: the image's platforms plus the host's. Dependencies differ by
+// platform (golang.org/x/sys is linked on amd64 only), so a check that
+// listed only the host's would pass on one machine and fail on another.
+var licencePlatforms = []string{"linux/amd64", "linux/arm64", runtime.GOOS + "/" + runtime.GOARCH}
+
 func TestDependencyLicences(t *testing.T) {
 	root := moduleRoot(t)
 	goBin := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cmd := exec.Command(goBin, "list", "-deps", "-test",
-		"-f", "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}", "./...")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			t.Fatalf("go list: %v\n%s", err, ee.Stderr)
+	var out []byte
+	for _, platform := range licencePlatforms {
+		goos, goarch, _ := strings.Cut(platform, "/")
+		cmd := exec.Command(goBin, "list", "-deps", "-test",
+			"-f", "{{with .Module}}{{if not .Main}}{{.Path}}{{end}}{{end}}", "./...")
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+		o, err := cmd.Output()
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				t.Fatalf("go list (%s): %v\n%s", platform, err, ee.Stderr)
+			}
+			t.Fatalf("go list (%s): %v", platform, err)
 		}
-		t.Fatalf("go list: %v", err)
+		out = append(out, o...)
 	}
 	seen := map[string]bool{}
 	for _, mod := range strings.Fields(string(out)) {
