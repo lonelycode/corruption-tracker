@@ -1,0 +1,151 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Case #{{.Data.Case.ID}}{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+{{$c := .Case}}
+<main class="page dossier-surface">
+  <a href="/admin/fraud/cases" class="rail-back">&larr; Case register</a>
+  <div class="dossier-kicker">Admin &middot; fraud case</div>
+  <h1 class="dossier-heading">#{{$c.ID}} — {{$c.CaseName}}</h1>
+
+  {{template "fraudCaseTabs" (printDict "ID" $c.ID "Active" "detail")}}
+
+  <div class="row" style="gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center">
+    <span class="tag {{if eq (printf "%s" $c.Status) "convicted"}}ok{{else if eq (printf "%s" $c.Status) "overturned"}}err{{end}}">{{$c.Status}}</span>
+    {{if $c.StatusOverridden}}<span class="tag info" title="Status set by hand, not derived from events.">⚑ status manually set</span>{{end}}
+    {{if eq $c.ReviewState "verified"}}<span class="tag ok">verified</span>{{else}}<span class="tag info">unverified</span>{{end}}
+    {{if $c.NamingApproved}}<span class="tag ok">naming approved</span>{{else}}<span class="tag">unnamed in reports</span>{{end}}
+    {{if $c.CovidRelated}}<span class="tag info">covid</span>{{end}}
+    <a href="/admin/fraud/cases/{{$c.ID}}/edit" class="btn btn-sm btn-primary">Edit</a>
+    <a href="/tracker/corruption/case/{{$c.ID}}" class="btn btn-sm btn-ghost" target="_blank">Org view &nearr;</a>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Coding</div>
+    <div class="row mono" style="font-size:11.5px; gap:18px; flex-wrap:wrap">
+      <span>typology: {{if .Labels.Typology}}{{.Labels.Typology}}{{else}}— ({{$c.TypologyRaw}}){{end}}</span>
+      <span>region: {{if .Labels.Region}}{{.Labels.Region}}{{else}}— ({{$c.RegionRaw}}){{end}}</span>
+      <span>agency: {{if .Labels.Agency}}{{.Labels.Agency}}{{else}}— ({{$c.AgencyRaw}}){{end}}</span>
+      {{if $c.TotalAmountNZD}}<span>amount: ${{printf "%.0f" (derefFloat $c.TotalAmountNZD)}}{{if $c.AmountBasis}} ({{$c.AmountBasis}}){{end}}</span>{{end}}
+      {{if $c.VictimClass}}<span>victims: {{$c.VictimClass}}</span>{{end}}
+      {{if $c.CourtName}}<span>court: {{$c.CourtName}}</span>{{end}}
+      {{if $c.CourtIdentifiers}}<span>file/citation: {{range $i, $id := $c.CourtIdentifiers}}{{if $i}}, {{end}}{{$id}}{{end}}</span>{{end}}
+      {{if $c.OffendingPeriodStart}}<span>offending: {{$c.OffendingPeriodStart.Format "Jan 2006"}}{{if $c.OffendingPeriodEnd}}–{{$c.OffendingPeriodEnd.Format "Jan 2006"}}{{end}}</span>{{end}}
+    </div>
+    {{if $c.Summary}}<p style="font-size:12.5px; white-space:pre-line; margin-top:10px">{{$c.Summary}}</p>{{end}}
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Participants</div>
+    <table class="dossier-table">
+      <thead><tr><th>Person</th><th>Role</th><th>Profession</th><th>Outcome</th><th>Sentence</th><th>Flags</th></tr></thead>
+      <tbody>
+        {{range .Participants}}
+        <tr>
+          <td>{{.PersonName}}</td>
+          <td class="mono" style="font-size:11px">{{.Role}}</td>
+          <td class="mono" style="font-size:11px">{{.ProfessionRaw}}</td>
+          <td class="mono" style="font-size:11px">{{if .Outcome}}{{.Outcome}}{{end}}</td>
+          <td style="font-size:12px">{{.SentenceDetail}}{{if .SentenceMonths}} <span class="mono" style="color:var(--fg-3)">({{.SentenceMonths}} mo){{end}}</span></td>
+          <td>
+            {{if .SuppressionFlag}}<span class="tag err">suppression</span>{{end}}
+            {{if .CleanSlatePossible}}<span class="tag info">clean-slate?</span>{{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if .Orgs}}
+    <div class="mono" style="font-size:11.5px; margin-top:8px; color:var(--fg-3)">
+      Organisations: {{range $i, $o := .Orgs}}{{if $i}}, {{end}}{{$o.Name}} ({{$o.Role}}){{end}}
+    </div>
+    {{end}}
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Lifecycle timeline (status is derived from these events)</div>
+    <table class="dossier-table">
+      <thead><tr><th class="when">Date</th><th>Event</th><th>Court</th><th>Detail</th><th>Source</th></tr></thead>
+      <tbody>
+        {{range .Events}}
+        <tr>
+          <td class="when mono">{{if .EventDate}}{{.EventDate.Format "2 Jan 2006"}}{{if .EventDatePrecision}}{{if ne (printf "%s" .EventDatePrecision) "day"}} <span style="color:var(--fg-3)">({{.EventDatePrecision}}){{end}}</span>{{end}}{{end}}</td>
+          <td class="mono" style="font-size:11px">{{.EventType}}</td>
+          <td class="mono" style="font-size:11px">{{.Court}}</td>
+          <td style="font-size:12px; max-width:320px">{{.OutcomeDetail}}</td>
+          <td style="font-size:11px">{{if .SourceURL}}<a href="{{.SourceURL}}" target="_blank" rel="noopener">{{if .Publisher}}{{.Publisher}}{{else}}link{{end}} &nearr;</a>{{end}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5" style="color:var(--fg-3)">No events recorded.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Sources (excerpts are private evidence — never republished)</div>
+    <table class="dossier-table">
+      <thead><tr><th>Publisher</th><th>Type</th><th class="when">Published</th><th>Excerpt</th></tr></thead>
+      <tbody>
+        {{range .Sources}}
+        <tr>
+          <td style="font-size:12px">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Publisher}}</a>{{else}}{{.Publisher}}{{end}}</td>
+          <td class="mono" style="font-size:11px">{{.SourceType}}</td>
+          <td class="when mono">{{if .PublishedDate}}{{.PublishedDate.Format "2 Jan 06"}}{{end}}</td>
+          <td style="font-size:11.5px; color:var(--fg-3); max-width:380px">{{if .Excerpt}}&ldquo;{{.Excerpt}}&rdquo;{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+
+  {{if .Claims}}
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Claims attached to this case</div>
+    <table class="dossier-table">
+      <tbody>
+        {{range .Claims}}
+        <tr>
+          <td><a href="/admin/fraud/claims/{{.ID}}">#{{.ID}} {{.Headline}}</a></td>
+          <td><span class="tag">{{.ReviewState}}</span></td>
+          <td class="when mono">{{.CreatedAt.Format "2 Jan 06"}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+
+  <div class="panel">
+    <div class="dossier-kicker">Actions</div>
+    <div class="row" style="gap:10px; flex-wrap:wrap; align-items:center">
+      {{if ne $c.ReviewState "verified"}}
+      <form method="post" action="/admin/fraud/cases/{{$c.ID}}/verify" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$csrf}}">
+        <button type="submit" class="btn btn-sm btn-primary">Verify (sign off)</button>
+      </form>
+      {{end}}
+      {{if $c.NamingApproved}}
+      <form method="post" action="/admin/fraud/cases/{{$c.ID}}/naming" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$csrf}}">
+        <input type="hidden" name="approved" value="0">
+        <button type="submit" class="btn btn-sm btn-ghost">Withdraw naming approval</button>
+      </form>
+      {{else}}
+      <form method="post" action="/admin/fraud/cases/{{$c.ID}}/naming" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{$csrf}}">
+        <input type="hidden" name="approved" value="1">
+        <label class="mono" style="font-size:10.5px"><input type="checkbox" name="attestation" value="1"> I checked: no suppression order applies</label>
+        <button type="submit" class="btn btn-sm btn-ghost">Approve naming</button>
+      </form>
+      {{end}}
+    </div>
+  </div>
+</main>
+{{end}}
+{{end}}

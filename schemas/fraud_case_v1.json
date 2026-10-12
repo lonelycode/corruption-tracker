@@ -1,0 +1,152 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["is_fraud_case", "case_stage", "exact_excerpt"],
+  "properties": {
+    "is_fraud_case": {
+      "type": "boolean",
+      "description": "True ONLY if the source reports a specific NZ criminal or regulatory enforcement matter in fraud, bribery, corruption, money laundering, cartel conduct, or markets/insider-trading offending — charges laid, a court appearance, a conviction/guilty plea, sentencing, or an appeal outcome. False for policy announcements, compliance reminders, warnings, statistics, consultations, or civil-only matters. When false, the other fields may be empty."
+    },
+    "case_stage": {
+      "type": "string",
+      "enum": ["charges_laid", "before_court", "convicted", "acquitted", "sentenced", "appeal_outcome", "discontinued", "other"],
+      "description": "The lifecycle stage this source reports. 'convicted' covers guilty pleas/findings before sentencing; 'acquitted' when the defendant was found not guilty; 'sentenced' when a sentence is imposed; 'appeal_outcome' for appeal decisions; 'other' when unclear."
+    },
+    "case_name_hint": {
+      "type": "string",
+      "description": "A short neutral description of the matter for matching (e.g. 'wage subsidy fraud, Auckland construction company'). Never invent details."
+    },
+    "persons": {
+      "type": "array",
+      "description": "Each specific person the source names as a defendant/accused (NOT investigators, officials, or spokespeople).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name_as_written"],
+        "properties": {
+          "name_as_written": {
+            "type": "string",
+            "description": "The person's name exactly as written. Do not normalise or correct. Empty string entries are not allowed — omit unnamed persons."
+          },
+          "role": {
+            "type": "string",
+            "enum": ["defendant", "co_accused", "named_associate"],
+            "description": "Their role in the matter."
+          },
+          "profession": {
+            "type": "string",
+            "description": "Their occupation/role as stated (e.g. 'company director', 'accountant'). Empty if not stated."
+          },
+          "charges": {
+            "type": "string",
+            "description": "The charges against this person as described, verbatim where possible. Empty if not stated."
+          },
+          "outcome": {
+            "type": "string",
+            "description": "This person's outcome if stated (e.g. 'pleaded guilty', 'sentenced to 3 years', 'acquitted'). Empty if not stated."
+          }
+        }
+      }
+    },
+    "organisations": {
+      "type": "array",
+      "description": "Companies/entities involved in the matter (vehicles, victims, employers). NOT the prosecuting agency.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "Organisation name as written." },
+          "role": {
+            "type": "string",
+            "enum": ["vehicle", "victim", "employer_of_offender", "regulator"],
+            "description": "Its role in the matter."
+          }
+        }
+      }
+    },
+    "prosecuting_agency": {
+      "type": "string",
+      "description": "The agency bringing the prosecution as stated (e.g. 'Serious Fraud Office', 'Inland Revenue', 'Commerce Commission'). Empty if not stated."
+    },
+    "court": {
+      "type": "string",
+      "description": "The court named (e.g. 'Auckland District Court'). Empty if not stated."
+    },
+    "court_identifiers": {
+      "type": "array",
+      "description": "Any court file numbers or citations the source states, EXACTLY as written: CRI numbers (e.g. 'CRI-2024-004-1234'), appeal registry numbers (e.g. 'CA123/2025', 'SC 45/2025'), or neutral citations (e.g. '[2025] NZHC 123'). Never invent or reconstruct one.",
+      "items": { "type": "string" }
+    },
+    "region": {
+      "type": "string",
+      "description": "The NZ locality/region of the offending or court as stated. Empty if not stated."
+    },
+    "typology_hint": {
+      "type": "string",
+      "description": "The kind of offending in the source's words (e.g. 'tax evasion', 'wage subsidy fraud', 'bribery of an official'). Empty if unclear."
+    },
+    "typology_slug": {
+      "type": "string",
+      "enum": ["", "tax-fraud", "covid-subsidy-fraud", "benefit-fraud", "acc-health-fraud",
+               "employer-theft", "mortgage-property-fraud", "investment-fraud", "charity-trust-fraud",
+               "public-sector-procurement", "bribery-corruption", "money-laundering",
+               "immigration-fraud", "cartel-conduct", "insider-trading-markets", "general-dishonesty"],
+      "description": "The PRIMARY offending typology, classified onto this fixed list. Use \"\" only when nothing fits. This is your classification; typology_hint stays the source's own words."
+    },
+    "agency_slug": {
+      "type": "string",
+      "enum": ["", "sfo", "ird", "nz-police", "comcom", "fma", "msd", "dia", "inz", "mbie", "acc"],
+      "description": "The prosecuting agency from this fixed list, ONLY when the source states which agency investigated or prosecuted. \"\" when not stated — never derive it from the offence type."
+    },
+    "total_amount_nzd": {
+      "type": "number",
+      "description": "The total sum involved in NZD if the source states one (use the case total, not per-person amounts). Omit or 0 if not stated."
+    },
+    "amount_basis": {
+      "type": "string",
+      "enum": ["alleged", "proven", "reparations_ordered", ""],
+      "description": "Whether the stated amount is alleged (pre-verdict), proven, or a reparations order. Empty if no amount."
+    },
+    "offending_period": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "description": "When the offending began, ISO 8601 (YYYY-MM-DD / YYYY-MM / YYYY) if stated. Empty otherwise." },
+        "end": { "type": "string", "description": "When the offending ended, ISO 8601 if stated. Empty otherwise." }
+      }
+    },
+    "event_date": {
+      "type": "string",
+      "description": "The date of the reported event (charges/conviction/sentencing/appeal), ISO 8601 if stated. Empty otherwise."
+    },
+    "suppression_indicators": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name_suppression_mentioned": {
+          "type": "boolean",
+          "description": "True if the source mentions name suppression, interim suppression, a suppression order, that a person cannot be named, or redaction markers."
+        },
+        "suppression_detail": {
+          "type": "string",
+          "description": "The verbatim phrase indicating suppression, if any. Empty otherwise."
+        }
+      }
+    },
+    "covid_related": {
+      "type": "boolean",
+      "description": "True if the offending involves COVID-19 support schemes (wage subsidy, resurgence payments, CSSP)."
+    },
+    "exact_excerpt": {
+      "type": "string",
+      "description": "The verbatim sentence(s) from the source this extraction is grounded on. Quote directly; do not paraphrase."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Your confidence (0..1) that this is a genuine fraud/corruption enforcement matter correctly extracted."
+    }
+  }
+}

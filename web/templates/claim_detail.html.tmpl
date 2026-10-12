@@ -1,0 +1,128 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Fraud Claim #{{.Data.Claim.ID}}{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+{{$c := .Claim}}
+<main class="page dossier-surface" style="max-width:1000px">
+  <a href="/admin/fraud/claims" class="rail-back">&larr; Queue</a>
+  <div class="dossier-kicker">Admin &middot; fraud claim</div>
+  <h1 class="dossier-heading">#{{$c.ID}} — {{$c.Headline}}</h1>
+
+  <div class="row mono" style="font-size:11.5px; color:var(--fg-3); margin-bottom:16px; display:flex; gap:1rem; flex-wrap:wrap;">
+    <span class="tag">{{$c.ReviewState}}</span>
+    <span>match: {{$c.MatchStatus}}{{if $c.CaseID}} &rarr; <a href="/admin/fraud/cases/{{$c.CaseID}}">case #{{$c.CaseID}}</a>{{end}}</span>
+    {{if $c.SuppressionFlag}}<span class="tag err">suppression flagged</span>{{end}}
+    {{if $c.NeedsManualExtraction}}<span class="tag info">needs manual extraction</span>{{end}}
+    {{if $c.ConfidenceScore}}<span>confidence {{printf "%.2f" (derefFloat $c.ConfidenceScore)}}</span>{{end}}
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h2 style="font-size:1rem">Provenance</h2>
+    <p style="font-size:.9rem">
+      {{$c.SourcePublisher}} ({{$c.SourceType}}){{if $c.PublishedDate}} &middot; {{$c.PublishedDate.Format "2 Jan 2006"}}{{end}}<br>
+      {{if $c.SourceURL}}<a href="{{$c.SourceURL}}" target="_blank" rel="noopener">{{$c.SourceURL}}</a><br>{{end}}
+      <span class="mono" style="font-size:11px">licence: {{$c.LicenceBasis}} &middot; hash: {{$c.ContentHash}}</span>
+    </p>
+    {{if $c.Excerpt}}<blockquote style="font-size:.85rem; border-left:3px solid var(--line,#ccc); padding-left:.6rem;">{{$c.Excerpt}}</blockquote>
+    <p style="font-size:.75rem; color:var(--fg-3)">Excerpt is private evidence — never republished.</p>{{end}}
+  </div>
+
+  {{if .PayloadPretty}}
+  <div class="panel" style="margin-bottom:16px">
+    <h2 style="font-size:1rem">Extraction payload</h2>
+    <pre class="mono" style="font-size:11px; white-space:pre-wrap; max-height:24rem; overflow:auto;">{{.PayloadPretty}}</pre>
+  </div>
+  {{end}}
+
+  <div class="panel" style="margin-bottom:16px">
+    <h2 style="font-size:1rem">Case attachment</h2>
+    <p style="font-size:.8rem; color:var(--fg-3)">Confirm an existing case so this claim promotes as
+    an EVENT on that case (this is how appeal/sentencing follow-ups track through the courts), or
+    mark "no match" so it promotes as a new case. Verify requires this decision.</p>
+    {{if .Candidates}}
+    <table>
+      <thead><tr><th>Case</th><th>Method</th><th>Score</th><th>Context</th><th>Decision</th><th></th></tr></thead>
+      <tbody>
+        {{range .Candidates}}
+        <tr>
+          <td>#{{.CaseID}} {{.CaseName}}</td>
+          <td>{{.MatchMethod}}</td>
+          <td>{{printf "%.1f" .MatchScore}}</td>
+          <td style="font-size:.8rem">{{.ContextNote}}</td>
+          <td>{{.Decision}}</td>
+          <td>
+            {{if eq .Decision "pending"}}
+            <form method="post" action="/admin/fraud/claims/{{$c.ID}}/match/{{.ID}}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{$csrf}}">
+              <button name="decision" value="confirm">Confirm</button>
+              <button name="decision" value="reject">Reject</button>
+            </form>
+            {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<p style="font-size:.85rem">No candidate cases suggested.</p>{{end}}
+    <form method="post" action="/admin/fraud/claims/{{$c.ID}}/no-match" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <button type="submit">No existing case matches (promote as new case)</button>
+    </form>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h2 style="font-size:1rem">Actions</h2>
+    <form method="post" action="/admin/fraud/claims/{{$c.ID}}/transition" style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <select name="to">
+        <option value="in_review">start review (in_review)</option>
+        <option value="verified">verify</option>
+        <option value="rejected">reject</option>
+        <option value="needs_more_info">needs more info</option>
+        <option value="quarantined_suppression">quarantine (suppression)</option>
+      </select>
+      <input type="text" name="note" placeholder="note (required for reject/release)" size="40">
+      <label style="font-size:.8rem"><input type="checkbox" name="attestation" value="1">
+        I checked suppression, Clean Slate, and the case attachment (required to verify)</label>
+      <button type="submit">Apply</button>
+    </form>
+    {{if eq (printf "%s" $c.ReviewState) "quarantined_suppression"}}
+    <form method="post" action="/admin/fraud/claims/{{$c.ID}}/release-vote" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <input type="text" name="note" placeholder="release vote note" size="40">
+      <button type="submit">Record release vote (a DIFFERENT reviewer then releases)</button>
+    </form>
+    {{end}}
+    {{if eq (printf "%s" $c.ReviewState) "verified"}}
+    <form method="post" action="/admin/fraud/claims/{{$c.ID}}/promote" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <button type="submit">Promote{{if $c.CaseID}} as event on case #{{$c.CaseID}}{{else}} as new case{{end}}</button>
+    </form>
+    {{end}}
+  </div>
+
+  <div class="panel">
+    <h2 style="font-size:1rem">Audit trail</h2>
+    <table>
+      <thead><tr><th>When</th><th>Who</th><th>Action</th><th>State</th><th>Note</th></tr></thead>
+      <tbody>
+        {{range .Reviews}}
+        <tr>
+          <td class="mono" style="font-size:11px">{{.CreatedAt.Format "2 Jan 2006 15:04"}}</td>
+          <td>{{.ReviewerLabel}}</td>
+          <td>{{.Action}}</td>
+          <td>{{if .FromState}}{{.FromState}} &rarr; {{end}}{{.ToState}}</td>
+          <td style="font-size:.8rem">{{.Note}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</main>
+{{end}}
+{{end}}

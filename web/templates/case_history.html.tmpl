@@ -1,0 +1,35 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Case #{{.Data.Case.ID}} history{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$c := .Case}}
+<main class="page dossier-surface" style="max-width:1024px">
+  <a href="/admin/fraud/cases" class="rail-back">&larr; Case register</a>
+  <div class="dossier-kicker">Admin &middot; fraud case</div>
+  <h1 class="dossier-heading">#{{$c.ID}} — {{$c.CaseName}}</h1>
+
+  {{template "fraudCaseTabs" (printDict "ID" $c.ID "Active" "history")}}
+
+  <div class="panel">
+    <div class="panel-head"><h3>Revisions</h3></div>
+    <p style="color:var(--fg-3); font-size:12px; margin-top:0">
+      Append-only audit trail of every edit to this case (entity_revisions).
+      Participant edits appear as <code>participant_&lt;id&gt;</code> fields.
+    </p>
+    {{if .Revisions}}
+      <ul class="list-rows" style="padding:0; margin:0; list-style:none">
+        {{range .Revisions}}
+          {{template "adminHistoryRow" .}}
+        {{end}}
+      </ul>
+    {{else}}
+      <p style="color:var(--fg-3); font-size:13px">No revisions yet.</p>
+    {{end}}
+  </div>
+</main>
+{{end}}
+{{end}}

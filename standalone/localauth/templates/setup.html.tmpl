@@ -1,0 +1,46 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Set up the tracker{{end}}
+
+{{define "content"}}
+{{with .Data}}
+<main class="page auth-page">
+  <h1>Welcome — create the administrator</h1>
+  <p>This is a new installation. Create the first administrator account. You can add reviewers
+  and viewers afterwards on the Users page. This page is only available until the first
+  administrator exists.</p>
+  {{if .Imported}}<p class="auth-warning" role="status">Data imported from export {{.Imported}}. Now create the
+  administrator. People who acted on the imported records can then be given logins on the Users page.</p>{{end}}
+  {{if .Error}}<p class="auth-error" role="alert">{{.Error}}</p>{{end}}
+  <form method="post" action="/setup" class="auth-form">
+    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+    <label for="setup-username">Username</label>
+    <input id="setup-username" name="username" value="{{.Username}}" autocomplete="username" required autofocus>
+    <label for="setup-password">Password (at least 10 characters)</label>
+    <input id="setup-password" type="password" name="password" autocomplete="new-password" minlength="10" required>
+    <label for="setup-password2">Repeat password</label>
+    <input id="setup-password2" type="password" name="password_confirm" autocomplete="new-password" minlength="10" required>
+    <button type="submit" class="btn btn-primary">Create administrator</button>
+  </form>
+
+  {{if not .Imported}}
+  <h2>Or start from an export</h2>
+  <p>Moving the tracker from another installation? Upload the export bundle it produced
+  (a <code>.tar.gz</code> file) before creating the administrator. The bundle is checked first;
+  if anything doesn't verify, nothing is imported. Imported data arrives with ingestion paused.</p>
+  <form method="post" action="/setup/import?csrf_token={{$.CSRFToken}}" enctype="multipart/form-data" class="auth-form">
+    <label for="setup-bundle">Export bundle</label>
+    <input id="setup-bundle" type="file" name="bundle" accept=".tar.gz,.tgz,application/gzip" required>
+    <label for="setup-passphrase">Secrets passphrase (optional)</label>
+    <input id="setup-passphrase" type="password" name="passphrase" autocomplete="off">
+    <p class="auth-note">Only if the bundle was exported with its stored secrets (the LLM key and the
+    mailbox password): enter the passphrase it was exported with. Without it, everything else is
+    imported and you enter those secrets again on the Settings page.</p>
+    <button type="submit" class="btn">Start from an export</button>
+  </form>
+  {{end}}
+</main>
+{{end}}
+{{end}}

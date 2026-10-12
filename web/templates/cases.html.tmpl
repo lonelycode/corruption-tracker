@@ -1,0 +1,97 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Fraud cases{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+{{$review := .Filter.ReviewState}}
+<main class="page dossier-surface">
+  <div class="dossier-kicker">Admin &middot; fraud tracker</div>
+  <h1 class="dossier-heading">Case register</h1>
+  <p class="dossier-sub">
+    The unit of analysis: persons are participants, status is derived from lifecycle events.
+    <strong>Verify</strong> is the reviewer sign-off that puts a case into the weekly report data;
+    <strong>naming approval</strong> additionally requires attesting that no suppression order
+    applies — pre-verdict cases render unnamed regardless.
+  </p>
+
+  <div class="row" style="gap:0; margin-bottom:16px; border-bottom:1px solid var(--rule); padding-bottom:0">
+    {{range $tab := strList "unverified" "verified" "all"}}
+      {{$href := printf "?review=%s" $tab}}{{if eq $tab "all"}}{{$href = "?"}}{{end}}
+      {{$active := or (eq $review $tab) (and (eq $tab "all") (eq $review ""))}}
+      <a href="{{$href}}"
+         class="row"
+         style="gap:6px; padding:9px 16px; text-decoration:none;
+                color:{{if $active}}var(--fg-1){{else}}var(--fg-3){{end}};
+                border-bottom:2px solid {{if $active}}var(--accent){{else}}transparent{{end}};
+                font-weight:{{if $active}}500{{else}}400{{end}}">
+        {{titleCase $tab}}
+      </a>
+    {{end}}
+  </div>
+
+  {{if .Cases}}
+    <table class="dossier-table">
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>Status</th>
+          <th>Amount</th>
+          <th>Review</th>
+          <th>Naming</th>
+          <th class="when">Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Cases}}
+          <tr>
+            <td style="max-width:380px">
+              <a href="/admin/fraud/cases/{{.ID}}"><strong>#{{.ID}}</strong> {{.CaseName}}</a>
+              {{if .TypologyRaw}}<div class="mono" style="font-size:11px; color:var(--fg-3)">{{.TypologyRaw}}</div>{{end}}
+            </td>
+            <td><span class="tag {{if eq (printf "%s" .Status) "convicted"}}ok{{else if eq (printf "%s" .Status) "overturned"}}err{{end}}">{{.Status}}</span></td>
+            <td class="mono" style="font-size:11px">{{if .TotalAmountNZD}}${{printf "%.0f" (derefFloat .TotalAmountNZD)}}{{end}}</td>
+            <td>
+              {{if eq .ReviewState "verified"}}<span class="tag ok">verified</span>
+              {{else}}
+              <form method="post" action="/admin/fraud/cases/{{.ID}}/verify" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <button type="submit" class="btn btn-sm btn-primary">Verify</button>
+              </form>
+              {{end}}
+            </td>
+            <td style="white-space:nowrap">
+              {{if .NamingApproved}}
+              <form method="post" action="/admin/fraud/cases/{{.ID}}/naming" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <input type="hidden" name="approved" value="0">
+                <span class="tag ok">named</span> <button type="submit" class="btn btn-sm btn-ghost">Withdraw</button>
+              </form>
+              {{else}}
+              <form method="post" action="/admin/fraud/cases/{{.ID}}/naming" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <input type="hidden" name="approved" value="1">
+                <label class="mono" style="font-size:10.5px" title="Attest that no suppression order applies">
+                  <input type="checkbox" name="attestation" value="1"> no suppression
+                </label>
+                <button type="submit" class="btn btn-sm btn-ghost">Approve naming</button>
+              </form>
+              {{end}}
+            </td>
+            <td class="when mono">{{.CreatedAt.Format "2 Jan 06"}}</td>
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+    <p style="margin-top:12px">
+      <a href="?offset={{.Next}}{{if .Filter.ReviewState}}&review={{.Filter.ReviewState}}{{end}}{{if .Filter.Status}}&status={{.Filter.Status}}{{end}}" class="btn btn-sm btn-ghost">Next page &rarr;</a>
+    </p>
+  {{else}}
+    <div class="empty-card">No cases for this filter.</div>
+  {{end}}
+</main>
+{{end}}
+{{end}}

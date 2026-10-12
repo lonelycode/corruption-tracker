@@ -1,0 +1,384 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Corruption &amp; Fraud Tracker{{end}}
+
+{{/*
+  Org-flag-gated tracker report — weekly, quarterly, or annual issues over
+  the same snapshot machinery, rendered on the site's report chrome.
+  Everything renders from an immutable snapshot payload reshaped by
+  buildFraudReportView; this template never sees live case tables. The
+  ALLEGED badge is template-enforced via the fraudCaseEntry block —
+  pre-verdict entries carry .Alleged from the builder and are unnamed by
+  construction. Charts draw ONLY the already-suppressed series that appear
+  in the tables beside them.
+*/}}
+
+{{define "fraudCaseEntry"}}
+<li style="margin:0 0 14px 0; padding-left:14px; border-left:3px solid {{if .Alleged}}#b45309{{else}}var(--rule, #ddd){{end}};">
+  <div style="display:flex; gap:8px; align-items:baseline; flex-wrap:wrap;">
+    {{if .Alleged}}
+    <span style="background:#b45309; color:#fff; font-weight:700; font-size:10px; padding:2px 6px; border-radius:3px; letter-spacing:.06em;">ALLEGED — BEFORE THE COURTS</span>
+    {{end}}
+    {{if .EventDate}}<span class="mono" style="font-size:11px; color:var(--fg-3);">{{.EventDate.Format "2 Jan 2006"}}</span>{{end}}
+    <strong><a href="/tracker/corruption/case/{{.CaseID}}" style="color:inherit;">{{.Label}}</a></strong>
+    {{if .Names}}<span>— {{range $i, $n := .Names}}{{if $i}}, {{end}}{{$n}}{{end}}</span>{{end}}
+  </div>
+  <div class="mono" style="font-size:11.5px; color:var(--fg-3); margin-top:3px;">
+    {{.Agency}}{{if .Amount}} &middot; ${{printf "%.0f" (derefFloat .Amount)}}{{if .Basis}} ({{.Basis}}{{if .Alleged}} — alleged{{end}}){{end}}{{end}}
+    {{if .EventDetail}} &middot; {{.EventDetail}}{{end}}
+  </div>
+  {{if .Summary}}<p style="font-size:13px; margin:4px 0 0 0; color:var(--fg-2);">{{.Summary}}</p>{{end}}
+</li>
+{{end}}
+
+{{define "content"}}
+{{with .Data}}
+<main class="page">
+<article class="report-page">
+
+  <header class="report-head">
+    <div class="report-head-tags">
+      <span class="report-tag">Restricted</span>
+      {{if .Report}}
+        {{if eq .Report.PeriodKind "year"}}<span class="report-tag">Annual issue</span>
+        {{else if eq .Report.PeriodKind "quarter"}}<span class="report-tag">Quarterly issue</span>
+        {{else}}<span class="report-tag">Weekly issue</span>{{end}}
+      {{end}}
+      {{if .Snapshot}}{{if gt .Snapshot.Version 1}}<span class="report-tag" style="color:#b45309;">Revised (v{{.Snapshot.Version}})</span>{{end}}{{end}}
+      {{if .DevBuild}}<span class="report-tag" style="color:#b91c1c;">Preview — includes unverified</span>{{end}}
+    </div>
+    <h1 class="report-title">Corruption &amp; Fraud Tracker</h1>
+    <p class="report-subtitle">Fraud, bribery, corruption, cartel and markets prosecutions in
+    New Zealand — tracked from charges laid through conviction and appeal. Trends describe cases,
+    not individuals.</p>
+    <div class="report-byline">
+      {{if .Report}}
+      {{$r := .Report}}
+      <span>{{if eq $r.PeriodKind "year"}}{{$r.Period}} annual report{{else if eq $r.PeriodKind "quarter"}}{{$r.Period}}{{else}}Week {{$r.Period}}{{end}}</span>
+      <span aria-hidden="true">&middot;</span>
+      <time>{{$r.PeriodStart.Format "2 Jan 2006"}} &ndash; {{($r.PeriodEnd.AddDate 0 0 -1).Format "2 Jan 2006"}}</time>
+      <span aria-hidden="true">&middot;</span>
+      <span>data as at {{$r.GeneratedAt.Format "2 Jan 2006 15:04 MST"}}</span>
+      {{end}}
+    </div>
+    {{if .Snapshot}}{{if and (gt .Snapshot.Version 1) .Snapshot.RevisionNote}}
+    <p class="report-caveat" style="margin-top:10px;"><strong>Revision note:</strong> {{.Snapshot.RevisionNote}}</p>
+    {{end}}{{end}}
+
+    {{/* Issue navigation: prev/next within the same kind, plus a jump
+         select grouped year / quarter / week. */}}
+    <nav aria-label="Issue picker" style="display:flex; gap:10px; align-items:center; margin-top:14px; flex-wrap:wrap;">
+      {{if .PrevPeriod}}<a href="?period={{.PrevPeriod}}" class="btn btn-sm btn-ghost">&larr; {{.PrevPeriod}}</a>{{end}}
+      <select onchange="location.href='?period='+this.value" aria-label="Jump to issue"
+              style="font-size:12px; padding:4px 8px;">
+        {{$selected := .Selected}}
+        <optgroup label="Annual">
+          {{range .Periods}}{{if eq .Kind "year"}}
+          <option value="{{.Period}}" {{if eq .Period $selected}}selected{{end}}>{{.Period}}{{if .Revised}} (revised){{end}}</option>
+          {{end}}{{end}}
+        </optgroup>
+        <optgroup label="Quarterly">
+          {{range .Periods}}{{if eq .Kind "quarter"}}
+          <option value="{{.Period}}" {{if eq .Period $selected}}selected{{end}}>{{.Period}}{{if .Revised}} (revised){{end}}</option>
+          {{end}}{{end}}
+        </optgroup>
+        <optgroup label="Weekly">
+          {{range .Periods}}{{if eq .Kind "week"}}
+          <option value="{{.Period}}" {{if eq .Period $selected}}selected{{end}}>{{.Period}}{{if .Revised}} (revised){{end}}</option>
+          {{end}}{{end}}
+        </optgroup>
+      </select>
+      {{if .NextPeriod}}<a href="?period={{.NextPeriod}}" class="btn btn-sm btn-ghost">{{.NextPeriod}} &rarr;</a>{{end}}
+      {{if .CanExport}}
+      <span style="margin-left:auto; display:flex; gap:8px;">
+        <a href="/tracker/corruption/explorer" class="btn btn-sm btn-ghost"
+           title="All cases in one searchable, filterable table with full detail">Case explorer</a>
+        {{if .Report}}
+        <a href="/tracker/corruption/export?period={{.Selected}}&format=csv" class="btn btn-sm btn-ghost"
+           title="Case digest for this period as CSV (covered by your access agreement)">Download CSV</a>
+        <a href="/tracker/corruption/export?period={{.Selected}}&format=md" class="btn btn-sm btn-ghost"
+           title="Case digest for this period as Markdown — paste-ready narrative entries">Download Markdown</a>
+        {{end}}
+      </span>
+      {{end}}
+    </nav>
+  </header>
+
+  <div class="report-body">
+
+  {{if not .Report}}
+    <div class="empty-card">No report has been generated{{if .Selected}} for {{.Selected}}{{end}} yet.</div>
+  {{else}}
+  {{$r := .Report}}
+  {{$v := .View}}
+  {{$periodNoun := "week"}}{{if eq $r.PeriodKind "year"}}{{$periodNoun = "year"}}{{else if eq $r.PeriodKind "quarter"}}{{$periodNoun = "quarter"}}{{end}}
+
+    {{/* At a glance. Period-scoped stats first; the last is cumulative. */}}
+    <section style="display:flex; gap:34px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--rule,#ddd); border-bottom:1px solid var(--rule,#ddd); margin-bottom:26px;">
+      <div><div class="mono" style="font-size:10.5px; color:var(--fg-3); letter-spacing:.06em;">CHARGES LAID <span style="letter-spacing:0">· this {{$periodNoun}}</span></div>
+        <div style="font-size:26px; font-weight:600;">{{$v.StatChargesLaid}}</div></div>
+      <div><div class="mono" style="font-size:10.5px; color:var(--fg-3); letter-spacing:.06em;">VERDICTS &amp; SENTENCINGS <span style="letter-spacing:0">· this {{$periodNoun}}</span></div>
+        <div style="font-size:26px; font-weight:600;">{{$v.StatConvictions}}</div></div>
+      <div><div class="mono" style="font-size:10.5px; color:var(--fg-3); letter-spacing:.06em;">APPEAL OUTCOMES <span style="letter-spacing:0">· this {{$periodNoun}}</span></div>
+        <div style="font-size:26px; font-weight:600;">{{$v.StatAppeals}}</div></div>
+      {{if $v.WeekSumLabel}}
+      <div><div class="mono" style="font-size:10.5px; color:var(--fg-3); letter-spacing:.06em;">SUMS IN THIS {{if eq $r.PeriodKind "year"}}YEAR&rsquo;S{{else if eq $r.PeriodKind "quarter"}}QUARTER&rsquo;S{{else}}WEEK&rsquo;S{{end}} CONVICTIONS</div>
+        <div style="font-size:26px; font-weight:600;">{{$v.WeekSumLabel}}</div></div>
+      {{end}}
+      <div><div class="mono" style="font-size:10.5px; color:var(--fg-3); letter-spacing:.06em;">OPEN ALLEGED MATTERS <span style="letter-spacing:0">· all on record</span></div>
+        <div style="font-size:26px; font-weight:600;">{{$v.StatOpenAlleged}} <span style="font-size:12px; color:#b45309; font-weight:700;">ALLEGED</span></div></div>
+    </section>
+
+    <h2>New this {{$periodNoun}}</h2>
+    <p style="color:var(--fg-3); font-size:13px;">Court events recorded with dates inside
+    {{$r.PeriodStart.Format "2 Jan 2006"}}&ndash;{{($r.PeriodEnd.AddDate 0 0 -1).Format "2 Jan 2006"}},
+    in date order. Everything in this section is scoped to the {{$periodNoun}}; the sections under
+    &ldquo;The full register&rdquo; below are not.</p>
+
+    <h3>Charges laid</h3>
+    {{if $r.NewInPeriod.ChargesLaid}}
+    <ul style="list-style:none; padding:0; margin:0 0 8px 0;">{{range $r.NewInPeriod.ChargesLaid}}{{template "fraudCaseEntry" .}}{{end}}</ul>
+    {{else}}<p style="color:var(--fg-3);">None recorded this {{$periodNoun}}.</p>{{end}}
+
+    <h3>Verdicts &amp; sentencings</h3>
+    {{if $r.NewInPeriod.Convictions}}
+    <ul style="list-style:none; padding:0; margin:0 0 8px 0;">{{range $r.NewInPeriod.Convictions}}{{template "fraudCaseEntry" .}}{{end}}</ul>
+    {{else}}<p style="color:var(--fg-3);">None recorded this {{$periodNoun}}.</p>{{end}}
+
+    <h3>Appeal outcomes</h3>
+    {{if $r.NewInPeriod.AppealOutcomes}}
+    <ul style="list-style:none; padding:0; margin:0 0 8px 0;">{{range $r.NewInPeriod.AppealOutcomes}}{{template "fraudCaseEntry" .}}{{end}}</ul>
+    {{else}}<p style="color:var(--fg-3);">None recorded this {{$periodNoun}}.</p>{{end}}
+
+    <hr style="border:none; border-top:2px solid var(--rule,#ddd); margin:30px 0 18px 0;">
+    <h2 style="margin-top:0;">The full register — as at {{$r.GeneratedAt.Format "2 Jan 2006"}}</h2>
+    <p style="color:var(--fg-3); font-size:13px;">Everything from here down describes the
+    <strong>entire tracked caseload</strong> as it stood when this issue was generated — not this
+    {{$periodNoun}}&rsquo;s activity. Each issue freezes this picture at its close, so stepping
+    through issues shows how the register grew; the typology trend below carries the time
+    dimension within an issue.</p>
+
+    <h3>Before the courts &amp; decided — by lifecycle stage</h3>
+    <p>All cases on record, by current stage. Alleged (pre-verdict) matters are never combined
+    with proven outcomes in any figure in this report.</p>
+    <table class="dossier-table" style="max-width:30rem;">
+      <thead><tr><th>Stage</th><th style="text-align:right;">Cases</th><th></th></tr></thead>
+      <tbody>
+        {{range $r.Pipeline}}
+        <tr>
+          <td>{{.Status}}</td>
+          <td class="mono" style="text-align:right;">{{.Count}}</td>
+          <td>{{if .Alleged}}<span style="color:#b45309; font-weight:700; font-size:10.5px;">ALLEGED</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+
+    {{if $v.TrendRows}}
+    <h3>Typology trend</h3>
+    <p>All cases on record with a <strong>standing conviction</strong> (convicted, pending appeal,
+    or upheld), placed in the quarter their verdict or sentence was recorded — most recent
+    {{len $v.TrendQuarters}} quarters.</p>
+    <p style="color:var(--fg-3); font-size:13px;">To protect privacy, when a typology has fewer
+    than {{$.Data.MinCell}} cases in a quarter those cases are counted under &ldquo;Other (small
+    cells)&rdquo; instead of shown separately — in a country New Zealand&rsquo;s size, a count of
+    one or two can identify the individuals involved. The totals are unaffected, and a typology
+    reappears as its own row once a quarter reaches {{$.Data.MinCell}} cases.</p>
+    <figure class="report-figure">
+      <div id="ft-chart-trend" class="report-chart" style="height:360px" role="img"
+           aria-label="Stacked bars of standing convictions per quarter, split by typology."></div>
+      <figcaption>
+        <span><strong>Convictions by quarter and typology.</strong> Same data as the table below.</span>
+        <button type="button" class="report-chart-dl" data-chart="ft-chart-trend" data-name="fraud-tracker-{{$r.Period}}-typology-trend">Download SVG</button>
+      </figcaption>
+    </figure>
+    <table class="dossier-table">
+      <thead>
+        <tr><th>Typology</th>{{range $v.TrendQuarters}}<th class="mono" style="text-align:right;">{{.}}</th>{{end}}<th class="mono" style="text-align:right;">Total</th></tr>
+      </thead>
+      <tbody>
+        {{range $v.TrendRows}}
+        <tr>
+          <td>{{.Typology}}</td>
+          {{range .Counts}}<td class="mono" style="text-align:right;">{{if .}}{{.}}{{else}}<span style="color:var(--fg-3);">&mdash;</span>{{end}}</td>{{end}}
+          <td class="mono" style="text-align:right; font-weight:600;">{{.Total}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+
+    {{if $v.Sums}}
+    <h3>Sums involved</h3>
+    <p>Totals across <strong>all cases on record with a standing conviction</strong> and a stated
+    sum — cases still before the courts are excluded entirely (their amounts appear only on their
+    own case pages, marked alleged). Sums are case-level, so co-accused are never double-counted.
+    The basis column describes the figure&rsquo;s provenance: a convicted case whose only stated
+    sum was the amount <em>alleged at charge time</em> shows as &ldquo;alleged&rdquo; and is never
+    combined with proven figures. Cases with no recorded sum are omitted, and groups of fewer than
+    {{$.Data.MinCell}} cases are left out for the same privacy reason as in the trend table (a
+    dollar figure attached to one or two cases effectively identifies them) — so case counts here
+    are lower than the stage table above.</p>
+    <figure class="report-figure">
+      <div id="ft-chart-sums" class="report-chart" style="height:320px" role="img"
+           aria-label="Horizontal bars of total sums involved by typology and amount basis."></div>
+      <figcaption>
+        <span><strong>Sums involved by typology.</strong> Alleged-basis figures are shown in amber, separately from proven.</span>
+        <button type="button" class="report-chart-dl" data-chart="ft-chart-sums" data-name="fraud-tracker-{{$r.Period}}-sums">Download SVG</button>
+      </figcaption>
+    </figure>
+    <table class="dossier-table" style="max-width:36rem;">
+      <thead><tr><th>Typology</th><th>Basis</th><th style="text-align:right;">Cases</th><th style="text-align:right;">Total</th></tr></thead>
+      <tbody>
+        {{range $v.Sums}}
+        <tr><td>{{.Typology}}</td><td class="mono" style="font-size:11.5px;">{{.Basis}}</td>
+          <td class="mono" style="text-align:right;">{{.Count}}</td>
+          <td class="mono" style="text-align:right; font-weight:600;">{{.Label}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{end}}
+
+    <h3>Where, and who prosecutes</h3>
+    <p style="color:var(--fg-3); font-size:13px;">All standing convictions on record, by region
+    and prosecuting agency. Regions or agencies with fewer than {{$.Data.MinCell}} cases are
+    grouped under &ldquo;Other (small cells)&rdquo; — small counts can identify individual cases.</p>
+    <div style="display:flex; gap:48px; flex-wrap:wrap;">
+      <div style="min-width:280px; flex:1;">
+        <h4 style="margin-top:0;">Regions</h4>
+        {{range $v.Regions}}
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+          <span style="width:11rem; font-size:13px;">{{.Label}}</span>
+          <span style="flex:1; background:var(--rule,#eee); border-radius:3px; height:10px; overflow:hidden;"><span style="display:block; height:100%; width:{{.Pct}}%; background:var(--accent,#2563eb);"></span></span>
+          <span class="mono" style="font-size:11.5px; width:2.4rem; text-align:right;">{{.Count}}</span>
+        </div>
+        {{end}}
+      </div>
+      <div style="min-width:280px; flex:1;">
+        <h4 style="margin-top:0;">Prosecuting agencies</h4>
+        {{range $v.Agencies}}
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+          <span style="width:11rem; font-size:13px;">{{.Label}}</span>
+          <span style="flex:1; background:var(--rule,#eee); border-radius:3px; height:10px; overflow:hidden;"><span style="display:block; height:100%; width:{{.Pct}}%; background:var(--accent,#2563eb);"></span></span>
+          <span class="mono" style="font-size:11.5px; width:2.4rem; text-align:right;">{{.Count}}</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+    <h3>Offending-to-conviction lag</h3>
+    {{if $r.Lag.Suppressed}}
+    <p style="color:var(--fg-3);">Not enough cases carry a recorded offending-start date for a
+    reliable distribution yet (n={{$r.Lag.SampleSize}}). This improves as reviewers code
+    offending periods.</p>
+    {{else}}
+    <p>Across {{$r.Lag.SampleSize}} cases with a recorded offending period, the median path from
+    the start of offending to conviction is <strong>{{printf "%.0f" $r.Lag.MedianMonths}} months</strong>
+    (quartiles {{printf "%.0f" $r.Lag.P25Months}}&ndash;{{printf "%.0f" $r.Lag.P75Months}} months).</p>
+    {{end}}
+
+    <blockquote class="report-caveat">
+      <strong>How to read this report.</strong> Two time scopes: &ldquo;New this
+      {{$periodNoun}}&rdquo; covers court events dated inside the issue&rsquo;s
+      {{$periodNoun}}; everything under &ldquo;The full register&rdquo; is the entire tracked
+      caseload as at the generation time in the byline.
+      Counts and sums describe <em>cases</em>, never individuals. Wherever a figure would cover
+      fewer than {{.MinCell}} cases it is grouped into &ldquo;Other&rdquo; or left out
+      ({{$r.SuppressedCells}} such figures in this issue) — in a country New Zealand&rsquo;s size,
+      very small counts can identify the people involved even when no one is named.
+      Pre-verdict matters are unnamed unless a reviewer has confirmed no suppression order applies,
+      and carry the ALLEGED mark wherever they appear. Corrections — including convictions
+      overturned on appeal — re-issue affected issues as visibly revised versions rather than
+      silently rewriting them.
+    </blockquote>
+  {{end}}
+
+  </div>
+
+  <footer class="report-foot">
+    <p class="report-foot-note">Provided to your organisation under its access agreement:
+    no republication of person-level data. Click any case for its full court timeline.</p>
+    <p class="report-foot-note">{{$.Notice}}</p>
+  </footer>
+</article>
+</main>
+
+{{if .Report}}
+{{if $.ChartScript}}<script src="{{$.ChartScript}}"></script>{{end}}
+<script>
+(function(){
+  if (!window.echarts) return;
+  var DATA = {{.ChartJSON}};
+  if (!DATA) return;
+  var ACCENT='#6366f1', AMBER='#f59e0b', SLATE='#64748b', AXIS='#475569', GRID='#f1f5f9';
+  var PALETTE=['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#f97316','#64748b','#a3a3a3'];
+  var FONT='Inter, system-ui, sans-serif';
+  var charts = {};
+  function mk(id){
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var c = echarts.init(el, null, { renderer: 'svg' });
+    charts[id] = c;
+    window.addEventListener('resize', function(){ c.resize(); });
+    return c;
+  }
+  var axisLabel = { fontSize: 11, color: AXIS, fontFamily: FONT };
+
+  // Typology trend: stacked bars per quarter.
+  var c1 = mk('ft-chart-trend');
+  if (c1 && DATA.trend && DATA.trend.length) {
+    var series = DATA.trend.map(function(row, i){
+      return { name: row.typology, type: 'bar', stack: 'q', data: row.counts,
+               itemStyle: { color: PALETTE[i % PALETTE.length] } };
+    });
+    c1.setOption({
+      textStyle: { fontFamily: FONT },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+      legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 10.5, fontFamily: FONT } },
+      grid: { left: 44, right: 16, top: 16, bottom: 56 },
+      xAxis: { type: 'category', data: DATA.quarters, axisLabel: axisLabel },
+      yAxis: { type: 'value', axisLabel: axisLabel, splitLine: { lineStyle: { color: GRID } } },
+      series: series
+    });
+  }
+
+  // Sums by typology: horizontal bars, alleged-basis amber.
+  var c2 = mk('ft-chart-sums');
+  if (c2 && DATA.sums && DATA.sums.length) {
+    var rows = DATA.sums.slice().reverse(); // largest at top
+    c2.setOption({
+      textStyle: { fontFamily: FONT },
+      tooltip: { trigger: 'item', formatter: function(p){
+        var d = rows[p.dataIndex];
+        return '<b>' + d.typology + '</b><br/>' + d.label + ' (' + d.basis + ', ' + d.count + ' cases)'; } },
+      grid: { left: 200, right: 40, top: 8, bottom: 28 },
+      xAxis: { type: 'value', axisLabel: Object.assign({}, axisLabel, { formatter: function(v){
+        return v >= 1e6 ? '$' + (v/1e6) + 'm' : v >= 1e3 ? '$' + (v/1e3) + 'k' : '$' + v; } }),
+        splitLine: { lineStyle: { color: GRID } } },
+      yAxis: { type: 'category', data: rows.map(function(d){ return d.typology + (d.basis !== 'proven' ? ' (' + d.basis + ')' : ''); }),
+        axisLabel: Object.assign({}, axisLabel, { width: 190, overflow: 'truncate' }) },
+      series: [{ type: 'bar', data: rows.map(function(d){
+        return { value: d.total, itemStyle: { color: d.basis === 'proven' ? ACCENT : AMBER } }; }) }]
+    });
+  }
+
+  document.querySelectorAll('.report-chart-dl').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var c = charts[btn.getAttribute('data-chart')];
+      if (!c || typeof c.renderToSVGString !== 'function') return;
+      var svg = c.renderToSVGString();
+      var blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = (btn.getAttribute('data-name') || 'chart') + '.svg';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    });
+  });
+})();
+</script>
+{{end}}
+{{end}}
+{{end}}

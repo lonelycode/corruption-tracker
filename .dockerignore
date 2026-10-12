@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+.git
+.env
+.env.*
+!.env.example
+/corruption-tracker
+*.test
+*.out
+backups/

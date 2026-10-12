@@ -1,0 +1,36 @@
+version = 1
+SPDX-PackageName = "corruption-tracker"
+SPDX-PackageDownloadLocation = "https://github.com/lonelycode/corruption-tracker"
+
+# Source files carry inline SPDX headers (checked by internal/licensecheck).
+# This file covers what can't: documentation, data, images, configuration
+# and the module files.
+[[annotations]]
+path = [
+  "**/*.md",
+  "**/*.json",
+  "**/*.ndjson",
+  "**/*.png",
+  "**/*.tar.gz",
+  "**/testdata/**",
+  ".github/CODEOWNERS",
+  ".dockerignore",
+  ".gitignore",
+  ".env.example",
+  "go.mod",
+  "go.sum",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Martin Buhr and contributors"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+# Vendored third-party code keeps its upstream licence. Never stamp AGPL
+# headers here. Each vendored package ships its upstream LICENSE.
+[[annotations]]
+path = "standalone/layout/static/vendor/echarts-5.5.0/**"
+precedence = "override"
+SPDX-FileCopyrightText = [
+  "2017-2024 The Apache Software Foundation",
+  "2010-2016 Mike Bostock",
+]
+SPDX-License-Identifier = "Apache-2.0 AND BSD-3-Clause"

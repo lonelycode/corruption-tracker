@@ -1,0 +1,111 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Users{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+<main class="page">
+  <h1>Users</h1>
+  <p>Roles: <strong>viewer</strong> reads the report and verified case pages (tick
+  <em>export</em> to add the case explorer and downloads); <strong>reviewer</strong> also runs the
+  back office (claims, cases, appeals) and sees unverified material; <strong>admin</strong> also
+  manages users and the instance. Every grant needs an access-basis note, such as the access
+  agreement reference. Users are disabled, never deleted.</p>
+  {{if .Warning}}<p class="auth-warning" role="status">{{.Warning}}</p>{{end}}
+
+  <table class="dossier-table">
+    <thead><tr><th>User</th><th>Role</th><th>Export</th><th>Access basis</th><th>Last sign-in</th><th>Actions</th></tr></thead>
+    <tbody>
+    {{range .Users}}
+      <tr{{if .Disabled}} class="is-disabled"{{end}}>
+        <td><strong>{{.Username}}</strong>{{if .Disabled}} <span class="tag muted">disabled</span>{{end}}
+          <div class="mono" style="font-size:11px">{{.ExternalRef}}</div></td>
+        <td>{{.Role}}</td>
+        <td>{{if eq (printf "%s" .Role) "viewer"}}{{if .CanExport}}yes{{else}}no{{end}}{{else}}implied{{end}}</td>
+        <td>{{.AccessBasis}}</td>
+        <td>{{if .LastLoginAt}}{{.LastLoginAt.Format "2 Jan 2006 15:04"}}{{else}}never{{end}}</td>
+        <td>
+          <form method="post" action="/admin/users/{{.ID}}/role" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{$csrf}}">
+            <select name="role" aria-label="Role for {{.Username}}">
+              {{$cur := .Role}}{{range $.Data.Roles}}<option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>{{end}}
+            </select>
+            <input name="note" placeholder="access-basis note" required aria-label="Note">
+            <button type="submit" class="btn btn-sm">Set role</button>
+          </form>
+          {{if eq (printf "%s" .Role) "viewer"}}
+          <form method="post" action="/admin/users/{{.ID}}/export" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{$csrf}}">
+            {{if .CanExport}}<input type="hidden" name="can_export" value="0">
+            <button type="submit" class="btn btn-sm">Revoke export</button>
+            {{else}}<input type="hidden" name="can_export" value="1">
+            <input name="note" placeholder="access-basis note" required aria-label="Note">
+            <button type="submit" class="btn btn-sm">Grant export</button>{{end}}
+          </form>
+          {{end}}
+          {{if .Disabled}}
+          <form method="post" action="/admin/users/{{.ID}}/enable" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{$csrf}}">
+            <button type="submit" class="btn btn-sm">Re-enable</button>
+          </form>
+          {{else}}
+          <form method="post" action="/admin/users/{{.ID}}/disable" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{$csrf}}">
+            <input name="note" placeholder="reason" aria-label="Reason">
+            <button type="submit" class="btn btn-sm">Disable</button>
+          </form>
+          {{end}}
+          <form method="post" action="/admin/users/{{.ID}}/password" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{$csrf}}">
+            <input type="password" name="password" autocomplete="new-password" placeholder="new password" minlength="{{$.Data.MinLen}}" required aria-label="New password">
+            <button type="submit" class="btn btn-sm">Reset password</button>
+          </form>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+
+  <h2>Add a user</h2>
+  <form method="post" action="/admin/users" class="auth-form">
+    <input type="hidden" name="csrf_token" value="{{$csrf}}">
+    <label for="new-username">Username</label>
+    <input id="new-username" name="username" required>
+    <label for="new-password">Initial password (at least {{.MinLen}} characters)</label>
+    <input id="new-password" type="password" name="password" autocomplete="new-password" minlength="{{.MinLen}}" required>
+    <label for="new-role">Role</label>
+    <select id="new-role" name="role">{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    <label><input type="checkbox" name="can_export" value="1"> Export (viewers only)</label>
+    <label for="new-note">Access-basis note</label>
+    <input id="new-note" name="note" placeholder="e.g. access agreement #12" required>
+    <button type="submit" class="btn btn-primary">Add user</button>
+  </form>
+
+  {{if .Claimable}}
+  <h2>Claim an imported reviewer</h2>
+  <p>These people acted on records imported from another instance. Nobody can sign in as them
+  until you claim one, which creates a login linked to their existing audit history.</p>
+  <form method="post" action="/admin/users/claim" class="auth-form">
+    <input type="hidden" name="csrf_token" value="{{$csrf}}">
+    <label for="claim-actor">Imported person</label>
+    <select id="claim-actor" name="actor_id">
+      {{range .Claimable}}<option value="{{.ID}}">{{.Label}} ({{.ExternalRef}})</option>{{end}}
+    </select>
+    <label for="claim-username">Username</label>
+    <input id="claim-username" name="username" required>
+    <label for="claim-password">Initial password</label>
+    <input id="claim-password" type="password" name="password" autocomplete="new-password" minlength="{{.MinLen}}" required>
+    <label for="claim-role">Role</label>
+    <select id="claim-role" name="role">{{range .Roles}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    <label><input type="checkbox" name="can_export" value="1"> Export (viewers only)</label>
+    <label for="claim-note">Access-basis note</label>
+    <input id="claim-note" name="note" required>
+    <button type="submit" class="btn btn-primary">Claim</button>
+  </form>
+  {{end}}
+</main>
+{{end}}
+{{end}}

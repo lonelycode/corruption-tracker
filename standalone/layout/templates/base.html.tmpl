@@ -1,0 +1,57 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "base"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:,">
+  <meta name="csrf-token" content="{{.CSRFToken}}">
+  <title>{{if eq .Page.Title .Brand.Name}}{{.Brand.Name}}{{else}}{{.Page.Title}} — {{.Brand.Name}}{{end}}</title>
+  <link rel="stylesheet" href="/static/standalone/base.css?v={{.CSSVersion}}">
+  {{if .AccentCSS}}<style>:root { {{.AccentCSS}} }</style>{{end}}
+  {{.Page.Head}}
+</head>
+<body class="sa">
+  <header class="sa-header">
+    <div class="sa-header-inner">
+      <a class="sa-brand" href="/">{{if .Brand.LogoURL}}<img src="{{.Brand.LogoURL}}" alt="" class="sa-logo">{{end}}<span>{{.Brand.Name}}</span></a>
+      {{if .Nav}}
+      <nav class="sa-nav" aria-label="Main">
+        {{range .Nav}}<a href="{{.Href}}"{{if .Active}} class="is-active" aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+      </nav>
+      {{end}}
+      <div class="sa-account">
+        {{if .SignedIn}}
+        <span class="sa-user">{{.User}}</span>
+        <form method="post" action="/logout" class="sa-logout">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <button type="submit" class="btn btn-sm btn-ghost">Sign out</button>
+        </form>
+        {{else}}
+        <a href="/login" class="btn btn-sm btn-ghost">Sign in</a>
+        {{end}}
+      </div>
+    </div>
+  </header>
+
+  {{with .Banner}}<div class="sa-banner sa-banner-{{.Level}}" role="status">{{.Message}}{{if .LinkURL}} <a href="{{.LinkURL}}" rel="noopener">{{.LinkText}}</a>.{{end}}</div>{{end}}
+  {{with .Flash}}<div class="sa-flash sa-flash-{{.Level}}" role="status">{{.Message}}</div>{{end}}
+
+  {{.Page.Body}}
+
+  <footer class="sa-footer">
+    <span>{{.Brand.Name}}</span>
+    <span aria-hidden="true">&middot;</span>
+    <a href="{{.SourceLink}}" rel="noopener">Source code ({{.License}})</a>
+    <span aria-hidden="true">&middot;</span>
+    <a href="/about">About</a>
+    <span aria-hidden="true">&middot;</span>
+    <span class="mono">{{.Build}}</span>
+  </footer>
+</body>
+</html>
+{{end}}

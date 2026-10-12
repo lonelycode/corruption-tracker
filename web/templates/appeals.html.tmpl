@@ -1,0 +1,99 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Appeal checks{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+<main class="page dossier-surface">
+  <a href="/admin/fraud" class="rail-back">&larr; Fraud tracker</a>
+  <div class="dossier-kicker">Admin &middot; HITL appeal-check worklist</div>
+  <h1 class="dossier-heading">Appeal checks</h1>
+
+  <div class="panel" style="margin-bottom:18px">
+    <div class="dossier-kicker">What this is, and what&rsquo;s expected of you</div>
+    <p style="font-size:13px; max-width:52rem">
+      Appeals are the tracker&rsquo;s blind spot: appeal <em>filings</em> are almost never announced
+      anywhere our connectors can poll, and the places that do record outcomes — the courts&rsquo;
+      judgment databases (Courts of NZ for the High Court and appellate courts) and NZLII —
+      <strong>prohibit automated access</strong>, so this system never fetches them and no code
+      path may. Monitoring them is therefore manual diligence, and this page is its schedule and
+      audit trail.
+    </p>
+    <p style="font-size:13px; max-width:52rem">
+      Each row is a case worth checking: it&rsquo;s either awaiting an appeal outcome, or was
+      convicted within the last {{.WindowDays}} days (the appeal-window heuristic). For each row:
+    </p>
+    <ol style="font-size:13px; max-width:52rem; padding-left:1.4rem">
+      <li>Open the <strong>Courts of NZ</strong> and <strong>NZLII</strong> links — they open in
+          <em>your browser</em>; the NZLII search is prefilled — and look for the case
+          (participant name, or the court file number / citation where we hold one).</li>
+      <li>Found an appeal decision (or any new court event)? Click
+          <strong>Record finding</strong> — it pre-fills a manual submission attached to this
+          case, which then goes through the normal review queue like any connector claim.</li>
+      <li>Nothing new? Click <strong>No appeal found</strong> — the check is logged under your
+          name and the case leaves this list for {{.CoolDays}} days (it returns sooner if its
+          status changes).</li>
+    </ol>
+    <p style="font-size:12px; color:var(--fg-3); max-width:52rem">
+      Never-checked cases sort first, then stalest checks. Working this list weekly keeps the
+      tracker&rsquo;s appeal coverage honest; the per-case check log is the evidence that we did
+      the diligence the access agreements promise.
+    </p>
+  </div>
+
+  {{if .Rows}}
+    <table class="dossier-table">
+      <thead>
+        <tr>
+          <th>Case</th>
+          <th>Status</th>
+          <th>Typology</th>
+          <th class="when">Convicted</th>
+          <th class="when">Last checked</th>
+          <th>Search (your browser)</th>
+          <th>Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Rows}}
+        <tr>
+          <td style="max-width:300px">
+            <a href="/admin/fraud/cases/{{.CaseID}}"><strong>#{{.CaseID}}</strong> {{.CaseName}}</a>
+            {{if .ParticipantNames}}
+            <div class="mono" style="font-size:11px; color:var(--fg-3)">
+              {{range $i, $n := .ParticipantNames}}{{if $i}}, {{end}}{{$n}}{{end}}
+            </div>
+            {{end}}
+          </td>
+          <td><span class="tag {{if eq .Status "appeal_pending"}}info{{end}}">{{.Status}}</span></td>
+          <td class="mono" style="font-size:11px">{{.Typology}}</td>
+          <td class="when mono">{{if .LastEventDate}}{{.LastEventDate.Format "2 Jan 2006"}}{{end}}</td>
+          <td class="when mono">{{if .LastChecked}}{{.LastChecked.Format "2 Jan 2006"}}{{else}}<span style="color:var(--fg-3)">never</span>{{end}}</td>
+          <td style="white-space:nowrap">
+            <a href="{{.JDOLink}}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost">Courts of NZ &nearr;</a>
+            <a href="{{.NZLIILink}}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost">NZLII &nearr;</a>
+          </td>
+          <td style="white-space:nowrap">
+            <a href="/admin/fraud/submit?case={{.CaseID}}&origin=appeals" class="btn btn-sm btn-primary">Record finding</a>
+            <form method="post" action="/admin/fraud/appeals/checked" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{$csrf}}">
+              <input type="hidden" name="case_id" value="{{.CaseID}}">
+              <button type="submit" class="btn btn-sm btn-ghost"
+                      title="Logs the check under your name; the case leaves the list for {{$.Data.CoolDays}} days">No appeal found</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  {{else}}
+    <div class="empty-card">Nothing to check — every eligible case has been checked within the
+    last {{.CoolDays}} days. Cases return here when their cooling window lapses or a new
+    conviction lands.</div>
+  {{end}}
+</main>
+{{end}}
+{{end}}

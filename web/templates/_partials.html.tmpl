@@ -1,0 +1,52 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{/* Partials shared by the back-office pages. adminHistoryRow is a copy of
+     the host admin partial of the same name (its markup must match). */}}
+
+{{define "fraudCaseTabs"}}
+  {{/* Args: dict with ID (case id) and Active ("detail"|"edit"|"history"). */}}
+  {{$id := .ID}}
+  {{$active := .Active}}
+  <nav class="row" style="gap:0; border-bottom:1px solid var(--rule); margin-bottom:20px; font-size:13px">
+    {{range $tab := strList "detail" "edit" "history"}}
+      {{$href := printf "/admin/fraud/cases/%d" $id}}
+      {{if ne $tab "detail"}}{{$href = printf "/admin/fraud/cases/%d/%s" $id $tab}}{{end}}
+      <a href="{{$href}}"
+         class="row"
+         style="gap:6px; padding:10px 16px; text-decoration:none;
+                color:{{if eq $active $tab}}var(--fg-1){{else}}var(--fg-3){{end}};
+                border-bottom:2px solid {{if eq $active $tab}}var(--accent){{else}}transparent{{end}};
+                font-weight:{{if eq $active $tab}}500{{else}}400{{end}}">
+        {{titleCase $tab}}
+      </a>
+    {{end}}
+  </nav>
+{{end}}
+
+{{define "adminHistoryRow"}}
+  {{/* Args: an EntityRevision (see internal/storage/db/revisions.go). */}}
+  <li class="list-row" style="padding:10px 0; border-bottom:1px solid var(--rule)">
+    <div class="row" style="gap:10px; align-items:baseline; font-size:12px">
+      <span class="mono" style="color:var(--fg-3); min-width:140px">
+        {{.CreatedAt.Format "2006-01-02 15:04"}}
+      </span>
+      <span class="tag {{if eq .ChangeKind "suppressed_write"}}err{{else if eq .ChangeKind "lock"}}{{else if eq .ChangeKind "unlock"}}muted{{end}}"
+            style="font-size:10.5px">
+        {{.ChangeKind}}
+      </span>
+      {{if .FieldName}}<span class="mono">{{.FieldName}}</span>{{end}}
+      <span style="color:var(--fg-2)">
+        by {{.ActorKind}}{{if .ActorSource}}/{{.ActorSource}}{{end}}
+      </span>
+    </div>
+    {{if or .Before .After}}
+      <div class="row" style="gap:14px; font-size:12px; margin-top:4px; padding-left:140px">
+        {{if .Before}}<div><span style="color:var(--fg-3)">before:</span> <code>{{toJSON .Before}}</code></div>{{end}}
+        {{if .After}}<div><span style="color:var(--fg-3)">after:</span> <code>{{toJSON .After}}</code></div>{{end}}
+      </div>
+    {{end}}
+    {{if .Note}}<div style="font-size:11.5px; color:var(--fg-3); margin-top:4px; padding-left:140px">{{.Note}}</div>{{end}}
+  </li>
+{{end}}

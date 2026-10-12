@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+
+# `go build ./cmd/...` from this directory writes the binary here.
+/corruption-tracker
+/cmd/corruption-tracker/corruption-tracker
+*.test
+*.out
+
+# The compose stack's local configuration (see .env.example) and the
+# backups `import --replace` writes by default.
+.env
+!.env.example
+backups/

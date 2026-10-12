@@ -1,0 +1,123 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Fraud claims queue{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+{{$state := .State}}
+<main class="page dossier-surface">
+  <div class="dossier-kicker">Admin &middot; fraud tracker</div>
+  <h1 class="dossier-heading">Claims review queue</h1>
+  <p class="dossier-sub">
+    Connector and manual submissions land here as <strong>unverified claims</strong>; nothing
+    reaches the case register without a reviewer decision. <strong>Approve</strong> attests the
+    content (suppression, Clean Slate, attachment checked) and promotes it — as an event on its
+    confirmed case, or as a new case. Claims needing manual extraction must be decided on their
+    detail page. Claims with <em>pending match candidates</em> are skipped by bulk approve unless
+    <strong>auto-resolve</strong> is ticked: a candidate scoring &ge;0.90 (court identifier or
+    exact participant name) is attached, anything weaker becomes a new case.
+  </p>
+
+  {{/* Status tabs. "Ready" = pending claims bulk-approve can fully process,
+       confidence-first: the daily pass is tick-all -> approve, then triage
+       what's left in Pending. */}}
+  <div class="row" style="gap:0; margin-bottom:12px; border-bottom:1px solid var(--rule); padding-bottom:0">
+    <a href="?ready=1" class="row"
+       style="gap:6px; padding:9px 14px; text-decoration:none;
+              color:{{if eq $state "ready"}}var(--fg-1){{else}}var(--fg-3){{end}};
+              border-bottom:2px solid {{if eq $state "ready"}}var(--accent){{else}}transparent{{end}};
+              font-weight:{{if eq $state "ready"}}500{{else}}400{{end}}">
+      Ready to approve
+    </a>
+    {{range $tab := strList "pending" "in_review" "needs_more_info" "quarantined_suppression" "verified" "rejected" "all"}}
+      <a href="?state={{$tab}}"
+         class="row"
+         style="gap:6px; padding:9px 14px; text-decoration:none;
+                color:{{if eq $state $tab}}var(--fg-1){{else}}var(--fg-3){{end}};
+                border-bottom:2px solid {{if eq $state $tab}}var(--accent){{else}}transparent{{end}};
+                font-weight:{{if eq $state $tab}}500{{else}}400{{end}}">
+        {{if eq $tab "quarantined_suppression"}}Quarantined{{else if eq $tab "needs_more_info"}}Needs info{{else}}{{titleCase $tab}}{{end}}
+        {{$n := index $.Data.Counts $tab}}{{if $n}}<span class="mono" style="font-size:10.5px; color:var(--fg-3)">{{$n}}</span>{{end}}
+      </a>
+    {{end}}
+  </div>
+  <div class="row" style="gap:14px; margin-bottom:16px; font-size:11.5px">
+    <a href="?state=all&suppression=1" class="mono">suppression-flagged</a>
+    <a href="?state=all&manual=1" class="mono">needs manual extraction</a>
+  </div>
+
+  {{if .Claims}}
+    {{$batch := or (eq $state "pending") (eq $state "in_review") (eq $state "ready")}}
+    {{if $batch}}
+    <form method="post" action="/admin/fraud/claims/batch" id="fraud-batch">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <input type="hidden" name="back" value="/admin/fraud/claims?{{if eq $state "ready"}}ready=1{{else}}state={{$state}}{{end}}">
+      <div class="row" style="gap:8px; margin-bottom:10px; align-items:center">
+        <button type="submit" name="action" value="approve" class="btn btn-sm btn-primary"
+                title="Attest (suppression, Clean Slate, attachment checked) and promote the selected claims">Approve selected</button>
+        <button type="submit" name="action" value="reject" class="btn btn-sm btn-ghost">Reject selected</button>
+        <input type="text" name="note" placeholder="note (required for reject)" size="34"
+               style="font-size:12px; padding:4px 8px">
+        <label class="row" style="gap:5px; font-size:11.5px; align-items:center"
+               title="Attach the top match candidate when it scores &ge;0.90 (court identifier / exact participant name); weaker or no candidates promote to a NEW case. Every auto decision is written to the claim's review log.">
+          <input type="checkbox" name="auto_resolve" value="1">
+          auto-resolve matches
+        </label>
+        <span class="mono" style="font-size:11px; color:var(--fg-3)">tick rows or use the header box; without auto-resolve, rows with pending candidates are skipped</span>
+      </div>
+    {{end}}
+    <table class="dossier-table">
+      <thead>
+        <tr>
+          {{if $batch}}<th style="width:24px"><input type="checkbox" onclick="for(const c of document.querySelectorAll('.fraud-cb'))c.checked=this.checked" title="Select all on this page"></th>{{end}}
+          <th>Claim</th>
+          <th>Source</th>
+          <th>Stage</th>
+          <th>Conf.</th>
+          <th>Flags</th>
+          <th class="when">Created</th>
+          {{if $batch}}<th></th>{{end}}
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Claims}}
+          <tr>
+            {{if $batch}}<td><input type="checkbox" class="fraud-cb" name="id" value="{{.ID}}"></td>{{end}}
+            <td style="max-width:340px">
+              <a href="/admin/fraud/claims/{{.ID}}">{{.Headline}}</a>
+              {{if .ExcerptShort}}<div style="font-size:11.5px; color:var(--fg-3); margin-top:2px">&ldquo;{{.ExcerptShort}}&rdquo;</div>{{end}}
+            </td>
+            <td class="mono" style="font-size:11px">
+              {{.SourcePublisher}}
+              {{if .SourceURL}}<br><a href="{{.SourceURL}}" target="_blank" rel="noopener" style="color:var(--fg-3)">source &nearr;</a>{{end}}
+            </td>
+            <td class="mono" style="font-size:11px">{{.Stage}}</td>
+            <td class="mono" style="font-size:11px">{{if .ConfidenceScore}}{{printf "%.2f" (derefFloat .ConfidenceScore)}}{{end}}</td>
+            <td>
+              {{if .SuppressionFlag}}<span class="tag err">suppression</span>{{end}}
+              {{if .NeedsManualExtraction}}<span class="tag info">manual</span>{{end}}
+              {{if .CaseID}}<span class="tag ok">case #{{.CaseID}}</span>{{end}}
+              {{if eq (printf "%s" .MatchStatus) "candidates_pending"}}<span class="tag info">match?</span>{{end}}
+            </td>
+            <td class="when mono">{{.CreatedAt.Format "2 Jan"}}</td>
+            {{if $batch}}
+            <td style="white-space:nowrap">
+              <button type="submit" name="row_approve" value="{{.ID}}" class="btn btn-sm btn-primary"
+                      {{if .NeedsManualExtraction}}disabled title="decide on the detail page"{{else if eq (printf "%s" .MatchStatus) "candidates_pending"}}title="Attest &amp; promote; pending match is skipped unless auto-resolve is ticked"{{else}}title="Attest &amp; promote this claim"{{end}}>Approve</button>
+              <button type="submit" name="row_reject" value="{{.ID}}" class="btn btn-sm btn-ghost">Reject</button>
+            </td>
+            {{end}}
+          </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if $batch}}</form>{{end}}
+  {{else}}
+    <div class="empty-card">No {{if eq $state "all"}}{{else}}{{$state}} {{end}}claims.</div>
+  {{end}}
+</main>
+{{end}}
+{{end}}

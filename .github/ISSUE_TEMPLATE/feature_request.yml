@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+name: Feature request
+description: Suggest a change or a new connector.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Outside code contributions can't be merged yet (see CONTRIBUTING.md), but ideas and discussion are welcome. Changes that would weaken a legal gate (naming, suppression, ALLEGED labels, report cell size, export defaults) need a clear rationale. A new source must be compliant: robots.txt, a licence basis, and the review queue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you're trying to do, and why it's hard today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: For a new source or connector
+      description: The publisher, its licence or terms, and its robots.txt. Never a judgment database (Judicial Decisions Online, NZLII).

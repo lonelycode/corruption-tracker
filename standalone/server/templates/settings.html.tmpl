@@ -1,0 +1,54 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+<section class="ct-settings">
+<h1>Settings</h1>
+{{if .Frozen}}<p class="ct-settings-frozen" role="status"><strong>Handoff in progress.</strong> Settings can still be changed, but changes made after the handoff export are not carried in the bundle: make them again on the new instance.</p>{{end}}
+<p>Changes apply immediately. Secrets are encrypted at rest and never shown again: leave a secret blank to keep it. A field marked <em>set by environment</em> is controlled by the server's environment and can't be changed here.
+Connectors are switched on and off on the <a href="/admin/ingestion">Ingestion</a> page.</p>
+
+<form method="post" action="/admin/settings">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+{{range .Groups}}
+<fieldset class="ct-settings-group">
+<legend>{{.Name}}</legend>
+{{range .Fields}}
+<div class="ct-setting">
+<label for="s-{{.Name}}">{{.Label}}</label>
+{{if .Locked}}
+  {{if .Secret}}<input id="s-{{.Name}}" type="password" value="" placeholder="{{if .IsSet}}set ({{.Hint}}){{else}}not set{{end}}" disabled>{{else if .Multiline}}<textarea id="s-{{.Name}}" rows="6" disabled>{{.Value}}</textarea>{{else}}<input id="s-{{.Name}}" type="text" value="{{.Value}}" disabled>{{end}}
+  <small class="ct-locked">set by environment: <code>{{.Env}}</code></small>
+{{else if .Options}}
+  <select id="s-{{.Name}}" name="{{.Name}}">{{$v := .Value}}{{range .Options}}<option value="{{.}}"{{if eq . $v}} selected{{end}}>{{.}}</option>{{end}}</select>
+  {{if and (eq .Name "naming.enabled") (ne .Value "on")}}<label class="ct-confirm"><input type="checkbox" name="naming_confirm" value="yes"> I confirm that everyone with access to this tracker has agreed in writing to verify suppression status before publishing anything, and that names may now be shown. This is recorded against my account.</label>{{end}}
+{{else if .Multiline}}
+  <textarea id="s-{{.Name}}" name="{{.Name}}" rows="6" spellcheck="false">{{.Value}}</textarea>
+{{else if .Secret}}
+  <input id="s-{{.Name}}" type="password" name="{{.Name}}" value="" autocomplete="new-password"
+         placeholder="{{if .Undecryptable}}stored but unreadable: re-enter{{else if .IsSet}}set ({{.Hint}}): leave blank to keep{{else}}not set{{end}}">
+  {{if .IsSet}}<label class="ct-clear"><input type="checkbox" name="clear" value="{{.Name}}"> clear</label>{{end}}
+{{else}}
+  <input id="s-{{.Name}}" type="text" name="{{.Name}}" value="{{.Value}}"{{if .Default}} placeholder="{{.Default}}"{{end}}>
+{{end}}
+{{if .Help}}<small>{{.Help}}</small>{{end}}
+{{if .UpdatedBy}}<small class="ct-updated">changed by {{.UpdatedBy}} · {{.UpdatedAt.UTC.Format "2006-01-02 15:04 UTC"}}</small>{{end}}
+</div>
+{{end}}
+</fieldset>
+{{end}}
+<button type="submit">Save settings</button>
+</form>
+
+<h2>Test connections</h2>
+<p>Uses the saved settings: save first.</p>
+<form method="post" action="/admin/settings/test/llm" class="ct-inline">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+<button type="submit">Test LLM</button>
+{{if .LLMConfigured}}<small>configured</small>{{else}}<small><strong>LLM not configured</strong>: jobs that read sources are skipped until it is.</small>{{end}}
+</form>
+<form method="post" action="/admin/settings/test/imap" class="ct-inline">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+<button type="submit">Test mailbox</button>
+</form>
+</section>

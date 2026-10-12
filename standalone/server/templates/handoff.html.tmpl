@@ -1,0 +1,41 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+<section class="ct-handoff">
+<h1>Handoff</h1>
+
+{{with .State}}
+<p>Mode: <strong>{{.Mode}}</strong>{{if .FreezeID}} · freeze <code>{{.FreezeID}}</code> by {{.FrozenBy}} at {{when .FrozenAt}}{{end}}{{if .HandoffExportID}} · handoff export <code>{{.HandoffExportID}}</code>{{end}}{{if .SuccessorURL}} · continues at <a href="{{.SuccessorURL}}">{{.SuccessorURL}}</a>{{end}}</p>
+{{end}}
+
+{{if eq .State.Mode "normal"}}
+  {{if .State.PendingResume}}
+  <h2>This instance was imported</h2>
+  <p>Imported from instance <code>{{.State.ImportedFrom.InstanceID}}</code>, export <code>{{.State.ImportedFrom.ExportID}}</code>. Ingestion is paused. Work through the checklist, then resume: every connector catches up from 24 hours before the source froze, and the imported dedupe keys stop duplicates.</p>
+  <form method="post" action="/admin/handoff/resume"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">Resume ingestion</button></form>
+  {{else}}
+  <p>To hand this tracker's dataset to another operator, freeze it: the dataset becomes read-only (the database refuses writes), scheduled ingestion stops, and you can then download the handoff bundle from Ingestion → Export.</p>
+  <form method="post" action="/admin/handoff/begin"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">Freeze for handoff</button></form>
+  {{end}}
+{{else if eq .State.Mode "frozen"}}
+  {{if .Running}}<p><strong>Still running:</strong> {{range .Running}}<code>{{.}}</code> {{end}} — wait for these before exporting.</p>{{else}}<p>No jobs are running.</p>{{end}}
+  <p>Next: download the handoff bundle from Ingestion → Export and import it on the new instance. Then either complete the handoff here, or abort to return to normal operation.</p>
+  <form method="post" action="/admin/handoff/complete">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <label>Handoff export id <input name="export_id" value="{{.State.HandoffExportID}}" required></label>
+    <label>Successor URL <input name="successor_url" type="url" placeholder="https://" required></label>
+    <button type="submit">Complete handoff</button>
+  </form>
+  <form method="post" action="/admin/handoff/abort"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button type="submit">Abort handoff</button></form>
+{{else}}
+  <p>This tracker has been handed off and stays read-only.</p>
+{{end}}
+
+{{if or (ne .State.Mode "normal") .State.PendingResume}}
+<h2>Handoff checklist</h2>
+<ul class="ct-checklist">
+{{range .Checklist}}<li><label><input type="checkbox"> {{.}}</label></li>
+{{end}}</ul>
+{{end}}
+</section>

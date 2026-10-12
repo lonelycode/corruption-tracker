@@ -1,0 +1,193 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Case explorer — Corruption &amp; Fraud Tracker{{end}}
+
+{{/*
+  Internal research surface (tracker access + export flag). Names are
+  pre-gated in the handler: pre-verdict or suppression/Clean Slate-flagged
+  cases arrive with Names empty and participant identity blanked. Everything
+  rendered here is covered by the org's access agreement.
+*/}}
+
+{{define "content"}}
+{{with .Data}}
+<main class="page dossier-surface">
+
+  <a href="/tracker/corruption" class="rail-back">&larr; Weekly reports</a>
+
+  <div class="dossier-kicker">Restricted &middot; corruption &amp; fraud tracker</div>
+  <h1 class="dossier-heading">Case explorer</h1>
+  <p class="dossier-sub" style="max-width:72ch;">
+    Every tracked case in one table — filter, search, export.
+    Lags marked <span class="mono">~</span> are computed from month/year-precision dates; agencies marked
+    <span class="tag info">inferred</span> are derived from the offence type, not stated by a source.
+    Pre-verdict matters are ALLEGED.
+  </p>
+
+  <form method="get" action="/tracker/corruption/explorer" class="fraud-explorer-filters">
+    {{$f := .Filter}}
+    <div class="form-field" style="grid-column: span 2;">
+      <label for="fx-q">Search</label>
+      <input id="fx-q" type="search" name="q" value="{{$f.Query}}" placeholder="Names, charges, summaries&hellip;">
+    </div>
+    <div class="form-field">
+      <label for="fx-typology">Typology</label>
+      <select id="fx-typology" name="typology">
+        <option value="">All typologies</option>
+        {{range .Facets.Typologies}}<option value="{{.Slug}}" {{if eq .Slug $f.TypologySlug}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-agency">Prosecuting agency</label>
+      <select id="fx-agency" name="agency">
+        <option value="">All agencies</option>
+        {{range .Facets.Agencies}}<option value="{{.Slug}}" {{if eq .Slug $f.AgencySlug}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-region">Region</label>
+      <select id="fx-region" name="region">
+        <option value="">All regions</option>
+        {{range .Facets.Regions}}<option value="{{.Slug}}" {{if eq .Slug $f.RegionSlug}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-sector">Sector</label>
+      <select id="fx-sector" name="sector">
+        <option value="">All sectors</option>
+        {{range .Facets.Sectors}}<option value="{{.Slug}}" {{if eq .Slug $f.SectorSlug}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-status">Case status</label>
+      <select id="fx-status" name="status">
+        <option value="">All statuses</option>
+        {{range .Facets.Statuses}}<option value="{{.Value}}" {{if eq .Value $f.Status}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-victim">Victim class</label>
+      <select id="fx-victim" name="victim">
+        <option value="">All victim classes</option>
+        {{range .Facets.VictimClasses}}<option value="{{.Value}}" {{if eq .Value $f.VictimClass}}selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-field">
+      <label for="fx-from">Year from</label>
+      <input id="fx-from" type="number" name="from" value="{{if $f.YearFrom}}{{$f.YearFrom}}{{end}}" placeholder="2018">
+    </div>
+    <div class="form-field">
+      <label for="fx-to">Year to</label>
+      <input id="fx-to" type="number" name="to" value="{{if $f.YearTo}}{{$f.YearTo}}{{end}}" placeholder="2026">
+    </div>
+    <div class="form-field">
+      <label for="fx-amount">Min amount NZD</label>
+      <input id="fx-amount" type="number" name="min_amount" value="{{if $f.MinAmountNZD}}{{printf "%.0f" $f.MinAmountNZD}}{{end}}" placeholder="100000">
+    </div>
+    {{if .IsAdmin}}
+    <div class="form-field">
+      <label for="fx-review">Review state</label>
+      <select id="fx-review" name="review">
+        <option value="" {{if eq .Review ""}}selected{{end}}>Verified only</option>
+        <option value="unverified" {{if eq .Review "unverified"}}selected{{end}}>Unverified only</option>
+        <option value="any" {{if eq .Review "any"}}selected{{end}}>Any</option>
+      </select>
+    </div>
+    {{end}}
+    <div class="form-field fraud-explorer-actions">
+      <label>&nbsp;</label>
+      <div class="row" style="gap:8px; flex-wrap:nowrap;">
+        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+        <a href="/tracker/corruption/explorer" class="btn btn-sm btn-ghost">Reset</a>
+        <label class="fraud-explorer-covid"><input type="checkbox" name="covid" value="1" {{if $f.CovidOnly}}checked{{end}}> COVID&#8209;related</label>
+      </div>
+    </div>
+  </form>
+
+  <div class="row-between" style="margin: 18px 0 10px;">
+    <span class="mono" style="font-size:12px; color:var(--fg-3);">
+      Showing {{.Shown}} of {{.Total}} case{{if ne .Total 1}}s{{end}}
+    </span>
+    <a href="{{.CSVHref}}" class="btn btn-sm btn-ghost"
+       title="Download this filtered set as CSV (covered by your access agreement)">Download CSV &middot; {{.Total}} case{{if ne .Total 1}}s{{end}}</a>
+  </div>
+
+  <div class="fraud-explorer-scroll">
+  <table class="dossier-table fraud-explorer">
+    <thead>
+      <tr>
+        <th scope="col">Case</th>
+        <th scope="col">Status</th>
+        <th scope="col">Classification</th>
+        <th scope="col">People &amp; charges</th>
+        <th scope="col" class="num">Amount&nbsp;(NZD)</th>
+        <th scope="col" title="When the offending occurred → when convicted">Offending&nbsp;&rarr;&nbsp;conviction</th>
+        <th scope="col" class="num" title="Years from the end of the offending to conviction. ~ = estimated from month/year-precision dates">Lag</th>
+        <th scope="col">Victims</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Rows}}
+      <tr>
+        <td class="mono" style="white-space:nowrap;">
+          <a href="/tracker/corruption/case/{{.ID}}">#{{.ID}}</a>
+          {{if .CovidRelated}}<div><span class="tag info">COVID</span></div>{{end}}
+          {{if ne .ReviewState "verified"}}<div><span class="tag err">unverified</span></div>{{end}}
+        </td>
+        <td style="white-space:nowrap;">
+          {{if .Alleged}}<span class="tag warn" title="Before the courts — no findings made">Alleged</span>
+          {{else}}{{.StatusLabel}}{{end}}
+        </td>
+        <td>
+          {{if .Typology}}<strong>{{.Typology}}</strong>{{else}}<span class="fraud-uncoded">Uncoded typology</span>{{end}}
+          {{range .Secondary}}<div class="fraud-cell-sub">+ {{.}}</div>{{end}}
+          <div class="fraud-cell-sub">
+            {{if .Agency}}{{.Agency}}{{if eq .AgencyBasis "inferred"}} <span class="tag info" title="Derived from the offence type; no source states it">inferred</span>{{end}}{{else}}<span class="fraud-uncoded">agency unknown</span>{{end}}{{if .Region}} &middot; {{.Region}}{{end}}{{if .Sector}} &middot; {{.Sector}}{{end}}
+          </div>
+        </td>
+        <td class="fraud-people-cell">
+          {{if .NamesShown}}
+            <strong>{{range $i, $n := .Names}}{{if $i}}, {{end}}{{$n}}{{end}}</strong>
+            {{range .Participants}}{{if .Profession}}<span class="fraud-cell-sub" style="display:inline;"> &middot; {{.Profession}}</span>{{end}}{{end}}
+          {{else}}
+            <span class="fraud-cell-sub" style="display:inline;">{{len .Participants}} participant{{if ne (len .Participants) 1}}s{{end}}
+              (unnamed — {{if .NamingOff}}naming is off for this tracker{{else if .Alleged}}before the courts{{else}}suppression / Clean Slate{{end}})</span>
+          {{end}}
+          {{if .ChargesText}}<div style="margin-top:3px;">{{.ChargesText}}</div>{{end}}
+          {{if .SentenceText}}<div class="fraud-cell-sub" style="margin-top:2px;">Sentence: {{.SentenceText}}</div>{{end}}
+        </td>
+        <td class="num">
+          {{if .AmountNZD}}{{humanNZD (derefFloat .AmountNZD)}}{{if .AmountBasis}}<div class="fraud-cell-sub">{{.AmountBasis}}{{if .Alleged}} — alleged{{end}}</div>{{end}}{{end}}
+        </td>
+        <td class="mono" style="white-space:nowrap; font-size:12px;">
+          {{if .OffendingStart}}{{.OffendingStart.Format "Jan 2006"}}{{if .OffendingEnd}}&ndash;{{.OffendingEnd.Format "Jan 2006"}}{{end}}{{end}}
+          {{if .ConvictionDate}}<div class="fraud-cell-sub">&rarr; {{.ConvictionDate.Format "2 Jan 2006"}}</div>{{end}}
+        </td>
+        <td class="num mono" {{if .LagApproximate}}title="Estimated — computed from month/year-precision dates"{{end}}>{{.LagYears}}</td>
+        <td>{{.VictimClass}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="8" style="padding:24px; color:var(--fg-3);">No cases match these filters.</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+
+  {{if or .PrevHref .NextHref}}
+  <nav class="row" style="margin-top:14px;" aria-label="Pagination">
+    {{if .PrevHref}}<a class="btn btn-sm btn-ghost" href="{{.PrevHref}}">&larr; Previous</a>{{end}}
+    {{if .NextHref}}<a class="btn btn-sm btn-ghost" href="{{.NextHref}}">Next &rarr;</a>{{end}}
+  </nav>
+  {{end}}
+
+  <footer style="font-size:12px; color:var(--fg-3); border-top:1px solid var(--line); padding-top:12px; margin-top:24px; max-width:90ch;">
+    <p>Provided under your organisation's access agreement: no republication of person-level data;
+    corrections (including overturned convictions) must be actioned in derived work. Views and
+    exports from this page are audit-logged.</p>
+    <p>{{$.Notice}}</p>
+  </footer>
+</main>
+{{end}}
+{{end}}

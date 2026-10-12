@@ -1,0 +1,89 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Duplicate cases{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+<main class="page dossier-surface">
+  <a href="/admin/fraud" class="rail-back">&larr; Fraud tracker</a>
+  <div class="dossier-kicker">Admin &middot; duplicate-case review</div>
+  <h1 class="dossier-heading">Duplicate cases</h1>
+
+  <div class="panel" style="margin-bottom:18px">
+    <div class="dossier-kicker">What this is</div>
+    <p style="font-size:13px; max-width:52rem">
+      The same matter reported by more than one outlet, or polled from more than one agency feed,
+      can land as separate case records — they then repeat in the explorer and its CSV export.
+      Each group below is a <strong>high-precision</strong> duplicate: the cases share an identical
+      set of participants <em>and</em> either agree on a concrete amount or cite the same source URL.
+      Merging folds a group into one winner — every event, source, participant, organisation and
+      claim is re-pointed onto it, missing factual fields are salvaged from the others, and the
+      losers are deleted.
+    </p>
+    <p style="font-size:12px; color:var(--fg-3); max-width:52rem">
+      The default winner (pre-selected) is the most complete record — verified first, then richest,
+      oldest breaks ties. Pick a different one with the radio if you know better. This is the same
+      detection the <span class="mono">ingester fraud merge-dupes</span> pass runs.
+    </p>
+  </div>
+
+  {{if .Groups}}
+    <div class="row-between" style="margin-bottom:14px">
+      <span class="mono" style="font-size:12px; color:var(--fg-3)">{{len .Groups}} duplicate group(s)</span>
+      <form method="post" action="/admin/fraud/duplicates/merge"
+            onsubmit="return confirm('Merge ALL {{len .Groups}} groups using the recommended winners? This deletes the duplicate records.');">
+        <input type="hidden" name="csrf_token" value="{{$csrf}}">
+        <input type="hidden" name="action" value="merge-all">
+        <button type="submit" class="btn btn-sm btn-primary">Merge all (recommended winners)</button>
+      </form>
+    </div>
+
+    {{range .Groups}}
+    <form method="post" action="/admin/fraud/duplicates/merge" class="panel" style="margin-bottom:14px"
+          onsubmit="return confirm('Merge this group into the selected winner? The other records will be deleted.');">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <input type="hidden" name="group" value="{{.GroupCSV}}">
+      <div class="dossier-kicker">Matched on: {{.Reason}}</div>
+      <table class="dossier-table" style="margin:8px 0">
+        <thead>
+          <tr>
+            <th style="width:3rem">Keep</th>
+            <th>Case</th>
+            <th>Status</th>
+            <th class="num">Amount</th>
+            <th class="num">Parts</th>
+            <th class="num">Sources</th>
+            <th class="num">Events</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{$winner := .WinnerID}}
+          {{range .Cases}}
+          <tr>
+            <td><input type="radio" name="winner" value="{{.ID}}" {{if eq .ID $winner}}checked{{end}} required></td>
+            <td style="max-width:340px">
+              <a href="/admin/fraud/cases/{{.ID}}"><strong>#{{.ID}}</strong> {{.CaseName}}</a>
+              {{if eq .ID $winner}}<span class="tag info">recommended</span>{{end}}
+            </td>
+            <td><span class="tag {{if eq .ReviewState "verified"}}ok{{end}}">{{.ReviewState}}</span></td>
+            <td class="num mono">{{if .AmountNZD}}{{printf "%.0f" (derefFloat .AmountNZD)}}{{end}}</td>
+            <td class="num mono">{{.Participants}}</td>
+            <td class="num mono">{{.Sources}}</td>
+            <td class="num mono">{{.Events}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-sm btn-primary">Merge group</button>
+    </form>
+    {{end}}
+  {{else}}
+    <div class="empty-card">No duplicate groups detected. Cases appear here only when they share an
+    identical participant set and agree on an amount or a source URL.</div>
+  {{end}}
+</main>
+{{end}}
+{{end}}

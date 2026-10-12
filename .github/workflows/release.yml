@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+#
+# Release: pushing a version tag (vX.Y.Z) publishes the multi-arch image to
+# ghcr.io/lonelycode/corruption-tracker and creates the GitHub release.
+# Nothing else triggers it, and nothing is published unless the full ci
+# workflow passes on the tagged commit first.
+
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the GitHub release
+      packages: write # the ghcr image
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: version from the tag
+        id: v
+        run: |
+          tag=${GITHUB_REF_NAME}
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "not a release tag: $tag"; exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          # A pre-release tag (v1.2.3-rc.1) never moves :latest.
+          if [[ "$tag" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+      - name: docker-compose.yml pins this release
+        # Operators run the compose file as shipped: it must reference this
+        # exact image tag, not :latest, before a release is cut.
+        run: |
+          if ! grep -q "ghcr.io/lonelycode/corruption-tracker:${{ steps.v.outputs.version }}" docker-compose.yml; then
+            echo "docker-compose.yml must default to ghcr.io/lonelycode/corruption-tracker:${{ steps.v.outputs.version }}"; exit 1
+          fi
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: image tags
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ghcr.io/lonelycode/corruption-tracker
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.v.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ steps.v.outputs.prerelease == 'false' }}
+      - name: build and push linux/amd64 and linux/arm64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.v.outputs.tag }}
+            COMMIT=${{ github.sha }}
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=(--generate-notes --verify-tag --title "${{ steps.v.outputs.tag }}")
+          if [ "${{ steps.v.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "${{ steps.v.outputs.tag }}" "${flags[@]}" \
+            --notes "Image: \`ghcr.io/lonelycode/corruption-tracker:${{ steps.v.outputs.version }}\` (linux/amd64, linux/arm64). Upgrade with \`docker compose pull && docker compose up -d\`; see docs/operator-guide.md."

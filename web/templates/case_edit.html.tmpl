@@ -1,0 +1,288 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Edit case #{{.Data.Case.ID}}{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+{{$c := .Case}}
+<main class="page dossier-surface" style="max-width:980px">
+  <a href="/admin/fraud/cases" class="rail-back">&larr; Case register</a>
+  <div class="dossier-kicker">Admin &middot; fraud case</div>
+  <h1 class="dossier-heading">Edit #{{$c.ID}} — {{$c.CaseName}}</h1>
+
+  {{template "fraudCaseTabs" (printDict "ID" $c.ID "Active" "edit")}}
+
+  {{/* ---- Status (derived vs manual override) ---- */}}
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Status</div>
+    <div class="row" style="gap:12px; align-items:center; flex-wrap:wrap">
+      <span class="tag {{if eq (printf "%s" $c.Status) "convicted"}}ok{{else if eq (printf "%s" $c.Status) "overturned"}}err{{end}}">{{$c.Status}}</span>
+      {{if $c.StatusOverridden}}
+        <span class="tag info" title="Set by hand; event edits will not change it.">⚑ manually set</span>
+      {{else}}
+        <span class="mono" style="font-size:11px; color:var(--fg-3)">derived from events</span>
+      {{end}}
+    </div>
+    <p style="font-size:11.5px; color:var(--fg-3); margin:8px 0 10px">
+      Status is normally derived from the lifecycle events. A manual override pins it and
+      stops event edits / recode from changing it, until you revert.
+    </p>
+    <form method="post" action="/admin/fraud/cases/{{$c.ID}}/status" class="row" style="gap:8px; align-items:center; flex-wrap:wrap">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <select name="status" class="input" style="max-width:220px">
+        {{range $s := .Statuses}}
+          <option value="{{$s}}" {{if eq (printf "%s" $c.Status) $s}}selected{{end}}>{{$s}}</option>
+        {{end}}
+      </select>
+      <button type="submit" class="btn btn-sm btn-ghost">Override status</button>
+    </form>
+    {{if $c.StatusOverridden}}
+    <form method="post" action="/admin/fraud/cases/{{$c.ID}}/status/revert" style="margin-top:8px">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <button type="submit" class="btn btn-sm btn-ghost">Revert to auto-derived</button>
+    </form>
+    {{end}}
+  </div>
+
+  {{/* ---- Case fields ---- */}}
+  <form method="post" action="/admin/fraud/cases/{{$c.ID}}/edit">
+    <input type="hidden" name="csrf_token" value="{{$csrf}}">
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="dossier-kicker">Identity &amp; coding</div>
+
+      <label class="form-label">Internal case name
+        <input class="input" type="text" name="case_name" value="{{$c.CaseName}}">
+      </label>
+
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:240px">Primary typology
+          <select class="input" name="typology_id">
+            <option value="">— uncoded —</option>
+            {{range $t := .Typologies}}
+              <option value="{{$t.ID}}" {{if eq (deref $c.TypologyID) $t.ID}}selected{{end}}>{{$t.Label}}{{if not $t.Active}} (inactive){{end}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:240px">Typology (raw text)
+          <input class="input" type="text" name="typology_raw" value="{{$c.TypologyRaw}}">
+        </label>
+      </div>
+
+      <label class="form-label">Secondary typologies (multi-select)
+        <select class="input" name="secondary_typology" multiple size="5">
+          {{range $t := .Typologies}}
+            <option value="{{$t.ID}}" {{if index $.Data.SecondarySet $t.ID}}selected{{end}}>{{$t.Label}}</option>
+          {{end}}
+        </select>
+      </label>
+
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:200px">Sector
+          <select class="input" name="sector_id">
+            <option value="">— uncoded —</option>
+            {{range $t := .Sectors}}
+              <option value="{{$t.ID}}" {{if eq (deref $c.SectorID) $t.ID}}selected{{end}}>{{$t.Label}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:200px">Region
+          <select class="input" name="region_id">
+            <option value="">— uncoded —</option>
+            {{range $t := .Regions}}
+              <option value="{{$t.ID}}" {{if eq (deref $c.RegionID) $t.ID}}selected{{end}}>{{$t.Label}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:200px">Region (raw)
+          <input class="input" type="text" name="region_raw" value="{{$c.RegionRaw}}">
+        </label>
+      </div>
+
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:240px">Prosecuting agency
+          <select class="input" name="prosecuting_agency_id">
+            <option value="">— uncoded —</option>
+            {{range $t := .Agencies}}
+              <option value="{{$t.ID}}" {{if eq (deref $c.ProsecutingAgencyID) $t.ID}}selected{{end}}>{{$t.Label}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:240px">Agency (raw)
+          <input class="input" type="text" name="agency_raw" value="{{$c.AgencyRaw}}">
+        </label>
+      </div>
+      <p style="font-size:11px; color:var(--fg-3); margin:0">Choosing an agency marks its basis "stated" (a curator's assignment, not an inferred guess).</p>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="dossier-kicker">Amount &amp; offending period</div>
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:200px">Total amount (NZD)
+          <input class="input" type="text" inputmode="decimal" name="total_amount_nzd"
+                 value="{{if $c.TotalAmountNZD}}{{printf "%.2f" (derefFloat $c.TotalAmountNZD)}}{{end}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:200px">Amount basis
+          <select class="input" name="amount_basis">
+            <option value="">—</option>
+            {{range $b := .AmountBases}}
+              <option value="{{$b}}" {{if eq (derefStr $c.AmountBasis) $b}}selected{{end}}>{{$b}}</option>
+            {{end}}
+          </select>
+        </label>
+      </div>
+      <label class="form-label">Amount note
+        <input class="input" type="text" name="amount_note" value="{{$c.AmountNote}}">
+      </label>
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:180px">Offending start
+          <input class="input" type="date" name="offending_period_start"
+                 value="{{if $c.OffendingPeriodStart}}{{$c.OffendingPeriodStart.Format "2006-01-02"}}{{end}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:180px">Offending end
+          <input class="input" type="date" name="offending_period_end"
+                 value="{{if $c.OffendingPeriodEnd}}{{$c.OffendingPeriodEnd.Format "2006-01-02"}}{{end}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:150px">Precision
+          <select class="input" name="offending_period_precision">
+            <option value="">—</option>
+            {{range $p := .Precisions}}
+              <option value="{{$p}}" {{if eq (derefStr $c.OffendingPeriodPrecision) $p}}selected{{end}}>{{$p}}</option>
+            {{end}}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="dossier-kicker">Court &amp; victims</div>
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:220px">Court name
+          <input class="input" type="text" name="court_name" value="{{$c.CourtName}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:180px">Court level
+          <input class="input" type="text" name="court_level" value="{{$c.CourtLevel}}">
+        </label>
+      </div>
+      <label class="form-label">Court identifiers (CRI / CA / SC / neutral citation — comma or newline separated)
+        <textarea class="input" name="court_identifiers" rows="2">{{range $i, $id := $c.CourtIdentifiers}}{{if $i}}, {{end}}{{$id}}{{end}}</textarea>
+      </label>
+      <div class="row" style="gap:16px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:200px">Victim class
+          <select class="input" name="victim_class">
+            <option value="">—</option>
+            {{range $v := .VictimClasses}}
+              <option value="{{$v}}" {{if eq (derefStr $c.VictimClass) $v}}selected{{end}}>{{$v}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:140px">Victim count
+          <input class="input" type="number" name="victim_count" value="{{if $c.VictimCount}}{{$c.VictimCount}}{{end}}">
+        </label>
+        <label class="form-label" style="flex:2; min-width:240px">Victim detail
+          <input class="input" type="text" name="victim_detail" value="{{$c.VictimDetail}}">
+        </label>
+      </div>
+      <label class="form-label row" style="gap:8px; align-items:center">
+        <input type="checkbox" name="covid_related" value="1" {{if $c.CovidRelated}}checked{{end}}>
+        COVID-related
+      </label>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="dossier-kicker">Summary</div>
+      <textarea class="input" name="summary" rows="5">{{$c.Summary}}</textarea>
+    </div>
+
+    <div class="row" style="gap:10px; margin-bottom:24px">
+      <button type="submit" class="btn btn-primary">Save case fields</button>
+      <a href="/admin/fraud/cases/{{$c.ID}}" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+
+  {{/* ---- Participants (one form each) ---- */}}
+  <div class="panel" style="margin-bottom:16px">
+    <div class="dossier-kicker">Participants</div>
+    <p style="font-size:11.5px; color:var(--fg-3); margin-top:0">
+      Edit an existing participant's role, charges, outcome and sentence. Adding or removing
+      people is not available here yet.
+    </p>
+    {{range .Participants}}
+    <form method="post" action="/admin/fraud/cases/{{$c.ID}}/participants/{{.ID}}"
+          style="border:1px solid var(--rule); border-radius:6px; padding:12px; margin-bottom:12px">
+      <input type="hidden" name="csrf_token" value="{{$csrf}}">
+      <div class="row" style="justify-content:space-between; align-items:baseline">
+        <strong style="font-size:13px">{{.PersonName}}</strong>
+        <span class="mono" style="font-size:10.5px; color:var(--fg-3)">participant #{{.ID}}</span>
+      </div>
+      <div class="row" style="gap:12px; flex-wrap:wrap; margin-top:8px">
+        <label class="form-label" style="flex:1; min-width:160px">Role
+          <select class="input" name="role">
+            {{$pr := .Role}}
+            {{range $role := $.Data.Roles}}
+              <option value="{{$role}}" {{if eq $pr $role}}selected{{end}}>{{$role}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:160px">Profession (raw)
+          <input class="input" type="text" name="profession_raw" value="{{.ProfessionRaw}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:120px">Gender
+          <input class="input" type="text" name="gender" value="{{.Gender}}">
+        </label>
+      </div>
+      <label class="form-label">Individual charges
+        <input class="input" type="text" name="individual_charges" value="{{.IndividualCharges}}">
+      </label>
+      <div class="row" style="gap:12px; flex-wrap:wrap">
+        <label class="form-label" style="flex:1; min-width:160px">Individual amount (NZD)
+          <input class="input" type="text" inputmode="decimal" name="individual_amount_nzd"
+                 value="{{if .IndividualAmountNZD}}{{printf "%.2f" (derefFloat .IndividualAmountNZD)}}{{end}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:160px">Outcome
+          <select class="input" name="outcome">
+            <option value="">—</option>
+            {{$po := derefStr .Outcome}}
+            {{range $o := $.Data.Outcomes}}
+              <option value="{{$o}}" {{if eq $po $o}}selected{{end}}>{{$o}}</option>
+            {{end}}
+          </select>
+        </label>
+        <label class="form-label" style="flex:1; min-width:160px">Sentence type
+          <select class="input" name="sentence_type">
+            <option value="">—</option>
+            {{$pst := derefStr .SentenceType}}
+            {{range $st := $.Data.SentenceTypes}}
+              <option value="{{$st}}" {{if eq $pst $st}}selected{{end}}>{{$st}}</option>
+            {{end}}
+          </select>
+        </label>
+      </div>
+      <div class="row" style="gap:12px; flex-wrap:wrap">
+        <label class="form-label" style="flex:2; min-width:220px">Sentence detail
+          <input class="input" type="text" name="sentence_detail" value="{{.SentenceDetail}}">
+        </label>
+        <label class="form-label" style="flex:1; min-width:140px">Sentence months
+          <input class="input" type="number" name="sentence_months" value="{{if .SentenceMonths}}{{.SentenceMonths}}{{end}}">
+        </label>
+      </div>
+      <div class="row" style="gap:18px; align-items:center; flex-wrap:wrap; margin-top:4px">
+        <label class="row" style="gap:6px; align-items:center; font-size:12px">
+          <input type="checkbox" name="suppression_flag" value="1" {{if .SuppressionFlag}}checked{{end}}> Suppression
+        </label>
+        <label class="row" style="gap:6px; align-items:center; font-size:12px">
+          <input type="checkbox" name="clean_slate_possible" value="1" {{if .CleanSlatePossible}}checked{{end}}> Clean-slate possible
+        </label>
+        <button type="submit" class="btn btn-sm btn-ghost">Save participant</button>
+      </div>
+    </form>
+    {{else}}
+    <p style="color:var(--fg-3); font-size:13px">No participants on this case.</p>
+    {{end}}
+  </div>
+</main>
+{{end}}
+{{end}}

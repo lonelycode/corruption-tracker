@@ -1,0 +1,104 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Manual submission{{end}}
+
+{{define "content"}}
+{{with .Data}}
+{{$csrf := $.CSRFToken}}
+<main class="page dossier-surface" style="max-width:760px">
+  <a href="{{if eq .Origin "appeals"}}/admin/fraud/appeals{{else}}/admin/fraud{{end}}" class="rail-back">&larr; Back</a>
+  <div class="dossier-kicker">Admin &middot; fraud tracker &middot; manual submission</div>
+  <h1 class="dossier-heading">Record a finding</h1>
+  <p class="dossier-sub" style="max-width:46rem">
+    The entry point for anything the connectors can&rsquo;t fetch: a JDO/NZLII result from the
+    appeal worklist, paywalled reporting, a judgment you read, a tip. You are the extractor here —
+    fill in what the source states, paste the supporting passage verbatim, and the submission
+    becomes a <strong>normal claim in the review queue</strong>: it still gets verified and
+    promoted like everything else, with you in the audit trail. Nothing skips review.
+  </p>
+
+  <form method="post" action="/admin/fraud/submit" class="panel" style="display:grid; gap:12px; padding:16px">
+    <input type="hidden" name="csrf_token" value="{{$csrf}}">
+    {{if .Origin}}<input type="hidden" name="origin" value="{{.Origin}}">{{end}}
+    {{if .Case}}
+    <div>
+      <div class="dossier-kicker">Attaching to</div>
+      <p style="font-size:13px; margin:4px 0">Case <strong>#{{.Case.ID}}</strong> — {{.Case.CaseName}}
+        <span class="tag">{{.Case.Status}}</span></p>
+      <input type="hidden" name="case_id" value="{{.Case.ID}}">
+      <p style="font-size:11.5px; color:var(--fg-3); margin:2px 0 0 0">On approval this promotes as a new
+      lifecycle event on the case (the case&rsquo;s status re-derives automatically).</p>
+    </div>
+    {{else}}
+    <label style="font-size:12px">Case ID to attach to (optional — leave blank for a new matter; match
+      suggestions will run)
+      <input type="number" name="case_id" min="1" style="display:block; width:10rem; padding:4px 8px">
+    </label>
+    {{end}}
+
+    <label style="font-size:12px">Headline (what happened, one line) *
+      <input type="text" name="headline" required size="60" style="display:block; width:100%; padding:4px 8px"
+             placeholder="e.g. Court of Appeal dismisses Smith's appeal against fraud conviction">
+    </label>
+
+    <div class="row" style="gap:12px; flex-wrap:wrap">
+      <label style="font-size:12px">What the source reports
+        <select name="stage" style="display:block; padding:4px 8px">
+          <option value="appeal_outcome" {{if eq .Origin "appeals"}}selected{{end}}>appeal outcome</option>
+          <option value="charges_laid">charges laid</option>
+          <option value="before_court">court appearance / plea</option>
+          <option value="convicted">verdict — guilty</option>
+          <option value="acquitted">verdict — acquitted</option>
+          <option value="sentenced">sentencing</option>
+          <option value="discontinued">discontinued / withdrawn</option>
+          <option value="other">other</option>
+        </select>
+      </label>
+      <label style="font-size:12px">Event date (if stated)
+        <input type="date" name="event_date" style="display:block; padding:4px 8px">
+      </label>
+      <label style="font-size:12px">Court
+        <input type="text" name="court" size="24" style="display:block; padding:4px 8px">
+      </label>
+      <label style="font-size:12px">File no. / citation
+        <input type="text" name="citation" size="20" placeholder="[2026] NZCA 123" style="display:block; padding:4px 8px">
+      </label>
+    </div>
+
+    <label style="font-size:12px">Outcome detail (verbatim where possible — for appeal outcomes this is
+      what drives the case status, e.g. &ldquo;appeal dismissed&rdquo; or &ldquo;conviction quashed&rdquo;)
+      <input type="text" name="outcome_detail" size="60" style="display:block; width:100%; padding:4px 8px">
+    </label>
+
+    <div class="row" style="gap:12px; flex-wrap:wrap">
+      <label style="font-size:12px">Source URL (if any)
+        <input type="url" name="url" size="50" style="display:block; width:100%; padding:4px 8px">
+      </label>
+      <label style="font-size:12px">Publisher / source
+        <input type="text" name="publisher" size="24" placeholder="NZLII / NZ Herald / ..." style="display:block; padding:4px 8px">
+      </label>
+      <label style="font-size:12px">Source type
+        <select name="source_type" style="display:block; padding:4px 8px">
+          <option value="judgment" {{if eq .Origin "appeals"}}selected{{end}}>judgment</option>
+          <option value="news">news</option>
+          <option value="agency_release">agency release</option>
+          <option value="manual" {{if ne .Origin "appeals"}}selected{{end}}>manual / other</option>
+        </select>
+      </label>
+    </div>
+
+    <label style="font-size:12px">Supporting text — paste the relevant passage verbatim; this is the
+      evidence the verifying reviewer checks against *
+      <textarea name="text" rows="6" required style="display:block; width:100%; padding:6px 8px"></textarea>
+    </label>
+
+    <label style="font-size:12px"><input type="checkbox" name="suppression" value="1">
+      The source mentions name suppression (the claim will be quarantined; release needs two reviewers)</label>
+
+    <div><button type="submit" class="btn btn-sm btn-primary">Submit to review queue</button></div>
+  </form>
+</main>
+{{end}}
+{{end}}

@@ -1,0 +1,162 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "title"}}Case timeline — Corruption &amp; Fraud Tracker{{end}}
+
+{{/*
+  Org-gated case drill-down. Everything rendered here was sanitized in the
+  handler: no internal case label, no source excerpts, and no names /
+  professions / summary / event detail unless the naming rule passed
+  (pre-verdict cases are named only when the prosecuting agency itself
+  published the matter). The ALLEGED banner is unconditional pre-verdict.
+*/}}
+
+{{define "content"}}
+{{with .Data}}
+<main class="page dossier-surface">
+<article class="fraud-case-page">
+
+  <a href="/tracker/corruption" class="rail-back">&larr; Weekly reports</a>
+
+  <header style="margin: 8px 0 20px;">
+    <div class="dossier-kicker">Restricted &middot; corruption &amp; fraud tracker</div>
+    <div class="row" style="gap:10px; align-items:center;">
+      <h1 class="dossier-heading" style="margin:0;">Case #{{.CaseID}}</h1>
+      <span class="tag {{if .Alleged}}warn{{else if eq .Status "convicted"}}ok{{else if eq .Status "acquitted"}}muted{{else if eq .Status "overturned"}}err{{else}}info{{end}}">{{.StatusLabel}}</span>
+      {{if .CovidRelated}}<span class="tag info">COVID-related</span>{{end}}
+      {{if .Unverified}}<span class="tag err">Unverified</span>{{end}}
+    </div>
+    <p class="dossier-sub" style="margin: 8px 0 0;">
+      {{if .Labels.Typology}}{{.Labels.Typology}}{{else}}Uncoded typology{{end}}{{range .SecondaryTypologies}} + {{.}}{{end}}
+      {{if .Labels.Sector}} &middot; {{.Labels.Sector}}{{end}}
+      {{if .Labels.Region}} &middot; {{.Labels.Region}}{{end}}
+      {{if .Labels.Agency}} &middot; {{.Labels.Agency}}{{if .Labels.AgencyInferred}} <span class="tag info" title="Derived from the offence type; no source states it">inferred</span>{{end}}{{end}}
+      {{if .CourtName}} &middot; {{.CourtName}}{{end}}
+    </p>
+  </header>
+
+  {{if .Alleged}}
+  <div class="fraud-case-alert">
+    <strong>ALLEGED — BEFORE THE COURTS, NO FINDINGS MADE.</strong>
+    This matter is unresolved; charges are allegations only. Pre-verdict, persons are named only
+    where the prosecuting agency has itself published their names.
+  </div>
+  {{end}}
+  {{if .Unverified}}
+  <div class="fraud-case-alert" style="border-color: var(--neg); color: var(--neg);">
+    <strong>Unverified case</strong> — admin preview; org users cannot see this page.
+  </div>
+  {{end}}
+
+  <section class="panel">
+    <div class="fraud-case-facts">
+      {{if .Amount}}
+      <div><div class="fraud-fact-label">Sum involved</div>
+        <div class="fraud-fact-value">{{humanNZD (derefFloat .Amount)}}{{if .AmountBasis}} <span class="fraud-fact-note">{{.AmountBasis}}{{if .Alleged}} — alleged{{end}}</span>{{end}}</div></div>
+      {{end}}
+      {{if .VictimClass}}
+      <div><div class="fraud-fact-label">Victim class</div><div class="fraud-fact-value">{{.VictimClass}}</div></div>
+      {{end}}
+      {{if .OffendingStart}}
+      <div><div class="fraud-fact-label">Offending period</div>
+        <div class="fraud-fact-value">{{.OffendingStart.Format "Jan 2006"}}{{if .OffendingEnd}} – {{.OffendingEnd.Format "Jan 2006"}}{{end}}</div></div>
+      {{end}}
+      {{if .LagOffenceToConviction}}
+      <div><div class="fraud-fact-label" title="From the end of the offending to conviction; ~ marks estimates from month/year-precision dates">Offence &rarr; conviction</div>
+        <div class="fraud-fact-value">{{.LagOffenceToConviction}}</div></div>
+      {{end}}
+      {{if .LagChargeToConviction}}
+      <div><div class="fraud-fact-label" title="From charges being laid to conviction">Charge &rarr; conviction</div>
+        <div class="fraud-fact-value">{{.LagChargeToConviction}}</div></div>
+      {{end}}
+      {{if .Orgs}}
+      <div><div class="fraud-fact-label">Organisations</div>
+        <div class="fraud-fact-value">{{range $i, $o := .Orgs}}{{if $i}}, {{end}}{{$o.Name}} <span class="fraud-fact-note">({{$o.Role}})</span>{{end}}</div></div>
+      {{end}}
+      {{if .CourtIdentifiers}}
+      <div><div class="fraud-fact-label">Court file / citation</div>
+        <div class="fraud-fact-value mono" style="font-size:12.5px;">{{range $i, $id := .CourtIdentifiers}}{{if $i}}, {{end}}{{$id}}{{end}}</div></div>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h3>Participants</h3></div>
+    {{if not .NamesShown}}
+    <p class="fraud-fact-note" style="margin: 0 0 12px;">
+      {{.ParticipantCount}} participant{{if ne .ParticipantCount 1}}s{{end}} —
+      names withheld{{if .NamingOff}} (naming is off for this tracker){{else if .Alleged}} (before the courts; no agency release names this matter){{else}} (suppression / Clean Slate / reviewer block){{end}}.
+    </p>
+    {{end}}
+    <table class="dossier-table">
+      <thead><tr><th>Person</th><th>Profession</th><th>Charges</th><th>Outcome</th><th>Sentence</th></tr></thead>
+      <tbody>
+        {{range $i, $p := .Participants}}
+        <tr>
+          <td style="white-space:nowrap;">{{if $p.Name}}<strong>{{$p.Name}}</strong>{{else}}<span class="fraud-uncoded">Participant {{add1 $i}}</span>{{end}}</td>
+          <td>{{$p.Profession}}</td>
+          <td style="max-width:30rem;">{{$p.Charges}}</td>
+          <td>{{$p.Outcome}}</td>
+          <td>{{$p.Sentence}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5" style="color:var(--fg-3);">No participants recorded.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+
+  {{if .Summary}}
+  <section class="panel">
+    <div class="panel-head"><h3>Case summary</h3></div>
+    <p style="font-size:13.5px; white-space:pre-line; margin:0; max-width:80ch;">{{.Summary}}</p>
+  </section>
+  {{end}}
+
+  <section class="panel">
+    <div class="panel-head"><h3>Court timeline</h3></div>
+    <ol class="fraud-timeline">
+      {{range .Timeline}}
+      <li>
+        <span class="fraud-timeline-dot {{if eq .Type "appeal_outcome"}}is-appeal{{else if or (eq .Type "sentencing") (eq .Type "verdict")}}is-verdict{{else if eq .Type "discontinued"}}is-ended{{end}}"></span>
+        <div class="row" style="gap:10px; align-items:baseline;">
+          <strong style="font-size:13.5px;">{{.Label}}</strong>
+          {{if .Date}}<span class="mono fraud-fact-note">
+            {{if eq .Precision "year"}}{{.Date.Format "2006"}}{{else if eq .Precision "month"}}{{.Date.Format "Jan 2006"}}{{else}}{{.Date.Format "2 Jan 2006"}}{{end}}</span>{{end}}
+          {{if .Court}}<span class="fraud-fact-note">{{.Court}}</span>{{end}}
+        </div>
+        {{if .Detail}}<div style="font-size:13px; margin-top:2px; max-width:75ch;">{{.Detail}}</div>{{end}}
+        {{if .SourceURL}}<div style="margin-top:2px;">
+          <a href="{{.SourceURL}}" target="_blank" rel="noopener" class="fraud-fact-note">{{if .Publisher}}{{.Publisher}}{{else}}source{{end}} &nearr;</a></div>{{end}}
+      </li>
+      {{else}}
+      <li><span class="fraud-timeline-dot"></span><span class="fraud-fact-note">No lifecycle events recorded yet.</span></li>
+      {{end}}
+    </ol>
+  </section>
+
+  {{if .Sources}}
+  <section class="panel">
+    <div class="panel-head"><h3>Sources</h3></div>
+    <ul style="font-size:13px; padding-left:1.1rem; margin:0;">
+      {{range .Sources}}
+      <li style="margin-bottom:4px;">{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Publisher}}{{if not .Publisher}}{{.URL}}{{end}}</a>{{else}}{{.Publisher}}{{end}}
+        <span class="fraud-fact-note">({{.Type}}{{if .PublishedDate}}, {{.PublishedDate.Format "2 Jan 2006"}}{{end}})</span></li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <footer style="font-size:12px; color:var(--fg-3); border-top:1px solid var(--line); padding-top:12px;">
+    <p>Status is derived from the recorded court events above. Corrections — including overturned
+    convictions — propagate to this page and re-issue affected weekly reports as visibly revised
+    versions. Provided under your organisation's access agreement: no republication of
+    person-level data.</p>
+    <p>{{$.Notice}}</p>
+  </footer>
+
+</article>
+</main>
+{{end}}
+{{end}}

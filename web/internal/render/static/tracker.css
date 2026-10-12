@@ -1,0 +1,95 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* SPDX-FileCopyrightText: 2026 Martin Buhr and contributors */
+
+/* Corruption & Fraud Case Tracker — tracker-specific styles.
+   Served at /static/corruption-tracker/tracker.css on every tracker page.
+   Builds on the host's design tokens (--fg-*, --bg-*, --line, --flag, --r-md,
+   --accent, --pos); the standalone layout supplies its own copies.
+   Hand-authored: edit directly. */
+
+/* ── Fraud tracker: case explorer ─────────────────────────────────────────
+   Internal research table (org-gated). The filter bar is a responsive grid
+   of labelled fields; the table reuses .dossier-table with right-aligned
+   numerics and a flexible people/charges column. Secondary facts inside a
+   cell (basis, region line, sentence) render as .fraud-cell-sub. */
+.fraud-explorer-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+  padding: 16px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.fraud-explorer-filters .form-field { margin-bottom: 0; }
+.fraud-explorer-actions { white-space: nowrap; }
+.fraud-explorer-covid {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--fg-2); white-space: nowrap;
+}
+.fraud-explorer-covid input { width: auto; }
+.fraud-explorer-scroll { overflow-x: auto; }
+.fraud-explorer { min-width: 1080px; }
+.fraud-explorer th.num, .fraud-explorer td.num {
+  text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fraud-explorer td { font-size: 12.5px; }
+.fraud-explorer .fraud-people-cell { min-width: 280px; max-width: 460px; }
+.fraud-cell-sub { color: var(--fg-3); font-size: 11.5px; margin-top: 2px; }
+.fraud-uncoded { color: var(--fg-3); font-style: italic; }
+
+/* ── Fraud tracker: case drill-down ───────────────────────────────────────
+   Reading-width article over .panel sections: facts grid, participants
+   table, event timeline. The alert block is the unconditional ALLEGED
+   banner (template-enforced pre-verdict). */
+.fraud-case-page { max-width: 920px; margin: 0 auto; }
+.fraud-case-alert {
+  border: 1.5px solid var(--flag);
+  border-left-width: 4px;
+  border-radius: var(--r-md);
+  color: var(--flag);
+  background: var(--flag-soft);
+  padding: 12px 16px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.fraud-case-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px 28px;
+}
+.fraud-fact-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 3px;
+}
+.fraud-fact-value { font-size: 14px; color: var(--fg-0); }
+.fraud-fact-note { font-size: 12px; color: var(--fg-3); }
+.fraud-timeline {
+  list-style: none; margin: 0; padding: 0 0 0 18px;
+  border-left: 2px solid var(--line);
+}
+.fraud-timeline li { position: relative; padding: 0 0 18px 8px; }
+.fraud-timeline li:last-child { padding-bottom: 2px; }
+.fraud-timeline-dot {
+  position: absolute; left: -25px; top: 3px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-1);
+}
+.fraud-timeline-dot.is-verdict { background: var(--pos); }
+.fraud-timeline-dot.is-appeal  { background: var(--flag); }
+.fraud-timeline-dot.is-ended   { background: var(--fg-3); }
+
+/* ── Instance banner (handoff freeze) ─────────────────────────────────────
+   Shown by host layouts above every tracker page while the instance is
+   frozen for a handoff or has been handed off (host.Banner). */
+.tracker-banner {
+  max-width: 1440px; margin: 16px auto 0; width: calc(100% - 56px);
+  padding: 10px 16px; border-radius: var(--r-md);
+  border: 1.5px solid var(--flag); background: var(--flag-soft); color: var(--flag);
+  font-size: 14px;
+}
+.tracker-banner a { color: inherit; text-decoration: underline; font-weight: 600; }

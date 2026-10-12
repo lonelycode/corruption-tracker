@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+#
+# Continuous integration: every push to main and every pull request, and
+# release.yml runs it on the tagged commit before publishing anything.
+# Nothing here publishes anything: the image is built for both
+# architectures but not pushed (release.yml does that, on a version tag).
+#
+# Third-party actions and tool images are pinned to a commit or digest (the
+# version in the comment); bump both together.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: vet, build and test (with Postgres)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tracker
+          POSTGRES_PASSWORD: tracker
+          POSTGRES_DB: tracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tracker -d tracker_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL_TEST: postgres://tracker:tracker@localhost:5432/tracker_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "gofmt needed:"; echo "$unformatted"; exit 1; fi
+      - name: go mod tidy is clean
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+      - name: vet
+        run: go vet ./...
+      - name: build
+        run: go build ./...
+      - name: mark the throwaway test database
+        # storetest refuses a database whose comment doesn't end in "test-db".
+        run: |
+          PGPASSWORD=tracker psql -h localhost -U tracker -d tracker_test \
+            -c "COMMENT ON DATABASE tracker_test IS 'tracker-test-db'"
+      - name: test
+        # -p 1: the DB-backed packages share one database.
+        run: |
+          set -o pipefail
+          go test -p 1 -count=1 -v ./... 2>&1 | tee test.log
+      - name: no skipped tests
+        # Every test has what it needs here, so a skip (most often a lost
+        # DATABASE_URL_TEST) fails the run: a skipped test proves nothing.
+        if: ${{ !cancelled() }}
+        run: scripts/ci-no-skips.sh test.log
+      # The import boundary (no package may import the host application), the
+      # SPDX header check and the bundle/SQL-scope checks are ordinary tests
+      # in the suite above.
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo:ro" zricethezav/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 detect --no-git --source /repo --redact
+      - name: trufflehog
+        # --no-verification: never probe hosts a finding names.
+        run: docker run --rm -v "$PWD:/repo:ro" trufflesecurity/trufflehog:3.82.13@sha256:9abf17c8902d58c05d82f910cf5dec05d100912482e8002d88918511fb44b6f6 filesystem /repo --no-update --no-verification --fail
+
+  reuse:
+    name: licensing (REUSE)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: reuse lint
+        run: docker run --rm -v "$PWD:/data:ro" fsfe/reuse:5.0.2@sha256:000c3fc0c3e39e95b36fa9966d0104ae0496571b7de7b9f0c889a66438581bda lint
+
+  compose-smoke:
+    name: compose smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: smoke test the docker compose stack
+        run: scripts/compose-smoke.sh
+
+  image:
+    name: multi-arch image build (not pushed)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: build linux/amd64 and linux/arm64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          build-args: |
+            VERSION=main
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

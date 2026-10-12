@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem (privately)
+    url: https://github.com/lonelycode/corruption-tracker/security/advisories/new
+    about: Vulnerabilities, and any way the tracker could disclose a name it should withhold. Never in a public issue.
+  - name: A record about a person or case (corrections, suppression, removal)
+    url: https://github.com/lonelycode/corruption-tracker/blob/main/DATA-ETHICS.md
+    about: This repository is the software, not a dataset. Contact the operator of the tracker that published the record. Don't name anyone in an issue here.

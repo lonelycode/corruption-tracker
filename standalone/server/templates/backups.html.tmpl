@@ -1,0 +1,36 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+<section class="ct-backups">
+<h1>Backups</h1>
+{{if .Status.Latest}}
+  {{if .Status.Stale}}<p class="ct-warning"><strong>The newest backup is more than {{.StaleHours}} hours old.</strong> The nightly backup job may be failing: check the <a href="/admin/ingestion">Ingestion</a> page.</p>
+  {{else}}<p>Last backup: <strong>{{.Status.Latest.Name}}</strong>, {{.Status.Latest.CreatedAt.UTC.Format "2006-01-02 15:04 UTC"}}.</p>{{end}}
+{{else}}
+  <p class="ct-warning"><strong>No backups yet.</strong> One is taken every night at 03:00, and before every upgrade that changes the database. Take one now with the button below.</p>
+{{end}}
+<p>Each backup holds a full database dump (restores everything, accounts and settings included) and an export bundle (the dataset in the format another tracker imports). They are kept on the data volume in <code>{{.Dir}}</code>: the newest of each of the last 14 days and of each of the last 8 weeks, and the last 3 taken before upgrades. Download copies to keep them somewhere else too. Stored secrets are in the dump only in encrypted form: restoring them needs this server's data volume key or <code>TRACKER_SECRET</code>.</p>
+
+<form method="post" action="/admin/backups/run" class="ct-inline">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+<button type="submit">Back up now</button>
+</form>
+
+{{if .Backups}}
+<table class="ct-table">
+<thead><tr><th>Backup</th><th>Kind</th><th>Schema</th><th>Size</th><th>Files</th></tr></thead>
+<tbody>
+{{range .Backups}}{{$b := .}}
+<tr>
+<td>{{.CreatedAt.UTC.Format "2006-01-02 15:04 UTC"}}{{if .Note}}<br><small>{{.Note}}</small>{{end}}</td>
+<td>{{.Kind}}</td>
+<td>{{.SchemaVersion}}</td>
+<td>{{bytes .Size}}</td>
+<td>{{range .Files}}<a href="/admin/backups/{{$b.Name}}/{{.Name}}" download>{{.Name}}</a><br>{{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{end}}
+</section>

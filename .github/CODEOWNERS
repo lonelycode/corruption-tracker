@@ -1,0 +1,12 @@
+# Default owner for everything.
+* @lonelycode
+
+# Legal gates: naming, suppression, quarantine, report privacy, export and
+# the append-only audit trail. Changes here always need the owner's review.
+/readmodel/naming.go        @lonelycode
+/suppression/               @lonelycode
+/fraudreport/               @lonelycode
+/bundle/                    @lonelycode
+/migrations/sql/            @lonelycode
+/DATA-ETHICS.md             @lonelycode
+/LICENSE                    @lonelycode

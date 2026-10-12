@@ -1,0 +1,62 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+<section class="ct-ingestion">
+<h1>Ingestion status</h1>
+
+<form method="post" action="/admin/ingestion/pause">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+{{if .Paused}}
+<p class="ct-paused"><strong>Ingestion is paused.</strong> No scheduled job starts until you resume. Manual runs and review work are unaffected.</p>
+<input type="hidden" name="paused" value="off">
+<button type="submit">Resume ingestion</button>
+{{else}}
+<p>Ingestion is running on schedule.</p>
+<input type="hidden" name="paused" value="on">
+<button type="submit">Pause ingestion</button>
+{{end}}
+</form>
+{{with .Backup}}
+<p{{if .Stale}} class="ct-warning"{{end}}>{{if .Latest}}Last backup: {{.Latest.CreatedAt.UTC.Format "2006-01-02 15:04 UTC"}} ({{.Latest.Kind}}){{if .Stale}}, <strong>more than {{$.StaleHours}} hours ago</strong>{{end}}.{{else}}<strong>No backups yet.</strong>{{end}} See <a href="/admin/backups">Backups</a>.</p>
+{{end}}
+
+<h2>Jobs</h2>
+<table class="ct-jobs">
+<thead><tr><th>Job</th><th>Schedule</th><th>Last run</th><th>Last success</th><th>Next run</th><th>New (7 days)</th><th>Last failure</th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr>
+<td>{{.Job.Name}}{{if .Running}} <em>(running)</em>{{end}}</td>
+<td><code>{{.Job.Schedule}}</code></td>
+<td>{{if .LastRun}}{{.LastRun.Status}} · {{when (at .LastRun.StartedAt)}}{{if and (ne .LastRun.Status "ok") (ne .LastRun.Status "error") (ne .LastRun.Status "running")}}<br><small>{{.LastRun.Error}}</small>{{end}}{{else}}never{{end}}</td>
+<td>{{if .LastSuccess}}{{when (at .LastSuccess.StartedAt)}} · {{.LastSuccess.Counters.New}} new{{else}}—{{end}}</td>
+<td>{{when .NextRun}}</td>
+<td>{{.New7d}}</td>
+<td>{{if .LastFailure}}{{when (at .LastFailure.StartedAt)}}<br><code class="ct-job-error">{{.LastFailure.Error}}</code>{{else}}—{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+
+<h2>Connectors</h2>
+<table class="ct-connectors">
+<thead><tr><th>Connector</th><th>State</th><th></th></tr></thead>
+<tbody>
+{{range .Connectors}}<tr>
+<td>{{.Label}} <small><code>{{.Name}}</code></small></td>
+<td>{{if .Enabled}}enabled{{else}}<strong>disabled</strong>{{end}}</td>
+<td><form method="post" action="/admin/ingestion/connectors">
+<input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+<input type="hidden" name="connector" value="{{.Name}}">
+{{if .Enabled}}<input type="hidden" name="enabled" value="off"><button type="submit">Disable</button>{{else}}<input type="hidden" name="enabled" value="on"><button type="submit">Enable</button>{{end}}
+</form></td>
+</tr>{{end}}
+</tbody>
+</table>
+
+<h2>Export</h2>
+<p>Download a complete, point-in-time bundle of this instance's dataset: every case, claim, review, snapshot and connector state, with checksums. Accounts, sessions and secrets are never included. Use it for backups and for handing the dataset to another operator.</p>
+<form method="post" action="/admin/ingestion/export">
+<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+<button type="submit">Download export bundle</button>
+</form>
+</section>

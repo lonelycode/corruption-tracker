@@ -1,0 +1,27 @@
+{{- /*
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Martin Buhr and contributors
+*/ -}}
+{{define "content"}}
+<main class="page sa-about">
+  <h1 class="dossier-heading">About this tracker</h1>
+  <p class="dossier-sub">{{.Name}} runs the open-source Corruption &amp; Fraud Case Tracker.</p>
+
+  <section class="panel">
+    <dl class="sa-facts">
+      <dt>Version</dt><dd class="mono">{{.Version}}</dd>
+      <dt>Commit</dt><dd class="mono">{{if .Commit}}{{.Commit}}{{else}}unknown (development build){{end}}</dd>
+      <dt>Licence</dt><dd>{{.LicenseName}} ({{.License}})</dd>
+      <dt>Source code</dt><dd><a href="{{.SourceLink}}" rel="noopener">{{.SourceLink}}</a></dd>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <h2>Your right to the source code</h2>
+    <p>This software is free software licensed under the {{.LicenseName}}. If you use it over a
+    network you are entitled to its complete source code, including any changes the operator of
+    this server has made: download it from <a href="{{.SourceURL}}" rel="noopener">{{.SourceURL}}</a>.
+    You may use, study, change and share it under the same licence.</p>
+  </section>
+</main>
+{{end}}
