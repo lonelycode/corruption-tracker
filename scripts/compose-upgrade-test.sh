@@ -97,8 +97,10 @@ dc1 up -d --wait --wait-timeout 180 || fail "version N+1 did not become healthy"
 has_site_name "$base" "$work/jar" || fail "the site name did not survive the upgrade"
 schema=$(dc1 exec -T db psql -U tracker -d tracker -tAc 'SELECT version FROM tracker_schema_migrations')
 [ "$schema" = "$latest" ] || fail "schema is $schema after the upgrade, want $latest"
-backups=$(dc1 exec -T tracker ls /data/backups)
+# /data/backups exists only once a backup was taken: an upgrade without a
+# schema change takes none, so list it only when one is expected.
 if [ "$old_latest" != "$latest" ]; then
+  backups=$(dc1 exec -T tracker sh -c 'ls /data/backups 2>/dev/null' || true)
   echo "$backups" | grep -q -- '-pre-migrate$' || fail "no pre-migrate backup after a schema change (have: $backups)"
 fi
 
