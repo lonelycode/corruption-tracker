@@ -17,7 +17,7 @@ import (
 
 // FraudExplorerFilter narrows SearchFraudCases. Zero values mean "any".
 type FraudExplorerFilter struct {
-	Query        string // keyword over summary, raw coding, participant names + charges
+	Query        string // keyword over raw coding and charges; summary, names and professions only where names may be shown
 	TypologySlug string
 	AgencySlug   string
 	RegionSlug   string
@@ -108,7 +108,11 @@ func (d *Store) SearchFraudCases(ctx context.Context, f FraudExplorerFilter) ([]
 			           'clean_slate_possible', cp.clean_slate_possible
 			       ) ORDER BY cp.id)                                   AS participants,
 			       bool_or(cp.suppression_flag OR cp.clean_slate_possible) AS any_flagged,
-			       string_agg(lower(concat_ws(' ', p.full_name, cp.individual_charges, cp.profession_raw)), ' ') AS part_text
+			       -- Searchable text, split by whether it identifies anyone:
+			       -- charges always, names and professions only where the
+			       -- row may show them (see the WHERE clause).
+			       string_agg(lower(COALESCE(cp.individual_charges, '')), ' ') AS charge_text,
+			       string_agg(lower(concat_ws(' ', p.full_name, cp.profession_raw)), ' ') AS ident_text
 			  FROM fraud_case_participants cp
 			  JOIN fraud_persons p ON p.id = cp.person_id
 			 GROUP BY cp.case_id
@@ -120,15 +124,7 @@ func (d *Store) SearchFraudCases(ctx context.Context, f FraudExplorerFilter) ([]
 			  FROM fraud_case_typologies ct JOIN fraud_typologies t ON t.id = ct.typology_id
 			 GROUP BY ct.case_id
 		)
-		SELECT c.id, c.status, c.review_state,
-		       -- THE naming rule (mirror of fraudNamingAllowed): not
-		       -- reviewer-blocked, no flagged participant, and pre-verdict
-		       -- only when an official agency release names the matter.
-		       c.naming_approved
-		           AND NOT COALESCE(parts.any_flagged, false)
-		           AND (NOT c.status IN ('charges_laid','before_court')
-		                OR EXISTS (SELECT 1 FROM fraud_sources fs
-		                            WHERE fs.case_id = c.id AND fs.source_type = 'agency_release')) AS naming_ok,
+		SELECT c.id, c.status, c.review_state, nk.naming_ok,
 		       COALESCE(t.label, ''), COALESCE(sec.labels, '{}'),
 		       COALESCE(s.label, ''), COALESCE(r.label, ''), COALESCE(a.label, ''), c.agency_basis,
 		       c.typology_raw, c.court_name, COALESCE(c.victim_class, ''), c.victim_detail,
@@ -148,6 +144,15 @@ func (d *Store) SearchFraudCases(ctx context.Context, f FraudExplorerFilter) ([]
 		  LEFT JOIN parts ON parts.case_id = c.id
 		  LEFT JOIN srcs  ON srcs.case_id = c.id
 		  LEFT JOIN sec   ON sec.case_id = c.id
+		  -- THE naming rule (mirror of readmodel.NamingAllowed): not
+		  -- reviewer-blocked, no flagged participant, and pre-verdict
+		  -- only when an official agency release names the matter.
+		  CROSS JOIN LATERAL (SELECT
+		       c.naming_approved
+		           AND NOT COALESCE(parts.any_flagged, false)
+		           AND (NOT c.status IN ('charges_laid','before_court')
+		                OR EXISTS (SELECT 1 FROM fraud_sources fs
+		                            WHERE fs.case_id = c.id AND fs.source_type = 'agency_release')) AS naming_ok) nk
 		 WHERE ($1 = '' OR t.slug = $1)
 		   AND ($2 = '' OR a.slug = $2)
 		   AND ($3 = '' OR r.slug = $3)
@@ -159,10 +164,16 @@ func (d *Store) SearchFraudCases(ctx context.Context, f FraudExplorerFilter) ([]
 		   AND ($9::float8 = 0 OR c.total_amount_nzd >= $9)
 		   AND ($10::int = 0 OR EXTRACT(YEAR FROM COALESCE(l.conviction_date, l.charges_date, c.created_at)) >= $10)
 		   AND ($11::int = 0 OR EXTRACT(YEAR FROM COALESCE(l.conviction_date, l.charges_date, c.created_at)) <= $11)
+		   -- The keyword follows the naming rule: summaries, participant
+		   -- names and professions match only on rows whose names may be
+		   -- shown, and never with naming off ($15), consistent with what
+		   -- the row displays. Everything else is displayed anyway.
 		   AND ($12 = '' OR
-		        lower(concat_ws(' ', CASE WHEN $15 THEN NULL ELSE c.summary END, c.typology_raw, c.agency_raw,
+		        lower(concat_ws(' ', c.typology_raw, c.agency_raw,
 		              c.court_name, c.victim_detail)) LIKE '%' || lower($12) || '%'
-		        OR (NOT $15 AND COALESCE(parts.part_text, '') LIKE '%' || lower($12) || '%'))
+		        OR COALESCE(parts.charge_text, '') LIKE '%' || lower($12) || '%'
+		        OR (NOT $15 AND nk.naming_ok AND (lower(COALESCE(c.summary, '')) LIKE '%' || lower($12) || '%'
+		            OR COALESCE(parts.ident_text, '') LIKE '%' || lower($12) || '%')))
 		 ORDER BY COALESCE(l.conviction_date, l.charges_date) DESC NULLS LAST, c.id DESC
 		 LIMIT $13 OFFSET $14`,
 		f.TypologySlug, f.AgencySlug, f.RegionSlug, f.SectorSlug, f.Status,
