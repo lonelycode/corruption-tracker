@@ -2,7 +2,7 @@
 
 A review-gated tracker for New Zealand fraud, bribery and corruption
 enforcement matters. It polls agency media releases (SFO, IRD, Commerce
-Commission, MSD, Police, ACC, MBIE, DIA), classifies news coverage and
+Commission, MSD, Police, MBIE, DIA), classifies news coverage and
 licensed alert emails, and routes everything into a human review queue.
 Only reviewer-verified cases reach the case register, the explorer and the
 periodic reports, and only under fixed naming and suppression rules.

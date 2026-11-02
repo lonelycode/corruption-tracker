@@ -28,6 +28,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -80,6 +81,12 @@ type Source struct {
 //   - INZ: news-centre listing is JS-paginated (one featured item in HTML)
 //     and the sitemap is 11 chunks per poll. Immigration-fraud prosecutions
 //     are covered via MBIE, Police, and the news classifier.
+//   - ACC: unregistered 2026-11. acc.co.nz now answers every plain HTTP
+//     request (newsroom and the SilverStripe sub-sitemaps alike) with an
+//     Imperva/Incapsula JS challenge, so the index cannot be read. Yield was
+//     already near zero (one claim in ~77 polls; almost every story failed
+//     the vocabulary pre-filter). ACC fraud prosecutions still reach us via
+//     Police releases and the news classifier.
 //   - OpenLaw NZ: blocked on an access arrangement (non-commercial default
 //     licence) — see the original tracker design notes §4.
 var Sources = []Source{
@@ -133,15 +140,6 @@ var Sources = []Source{
 		// (and records) most items before any LLM spend.
 		FetchIndex: listingIndexer("https://www.police.govt.nz/news", "https://www.police.govt.nz",
 			regexp.MustCompile(`href="(/news/release/[^"#?]+)"`)),
-	},
-	{
-		Slug:         "acc",
-		Label:        "ACC",
-		AgencySlug:   "acc",
-		LicenceBasis: "crown-copyright-cc-by-4.0 (NZGOAL, acc.co.nz)",
-		RobotsURL:    "https://www.acc.co.nz/robots.txt", // 404 = default-allow
-		PathPrefix:   "/newsroom/stories/",
-		FetchIndex:   sitemapIndexer("https://www.acc.co.nz", "/newsroom/stories/", 2*time.Second),
 	},
 	{
 		Slug:         "mbie",
@@ -200,7 +198,26 @@ func (f *Fetcher) Get(ctx context.Context, url string) (string, error) {
 	if status != http.StatusOK {
 		return "", fmt.Errorf("GET %s: status %d", url, status)
 	}
+	if IsBotChallenge(body) {
+		return "", fmt.Errorf("GET %s: %w", url, ErrBotChallenge)
+	}
 	return body, nil
+}
+
+// ErrBotChallenge marks a 200 response that is a WAF interstitial rather
+// than the requested document. Without this the caller sees a misleading
+// downstream error (e.g. "XML syntax error: element <META> closed by
+// </html>" from a sitemap parse).
+var ErrBotChallenge = errors.New("bot challenge page (WAF interstitial) instead of content")
+
+// IsBotChallenge reports whether body is a known WAF challenge page.
+// Imperva/Incapsula interstitials load /_Incapsula_Resource.
+func IsBotChallenge(body string) bool {
+	head := body
+	if len(head) > 4096 {
+		head = head[:4096]
+	}
+	return strings.Contains(head, "_Incapsula_Resource")
 }
 
 func (f *Fetcher) get(ctx context.Context, url string) (string, int, error) {

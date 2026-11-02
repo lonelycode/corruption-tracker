@@ -5,6 +5,7 @@ package fraudagency
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -197,5 +198,34 @@ func TestSuppressionScreen(t *testing.T) {
 	unnamedDone := &Extraction{IsFraudCase: true, CaseStage: "sentenced"}
 	if hit, _ := suppressionScreen(unnamedDone, "A man was sentenced for fraud."); hit {
 		t.Error("unnamed post-verdict must not auto-flag")
+	}
+}
+
+// A WAF interstitial served with 200 must surface as ErrBotChallenge, not as
+// a confusing parse error further down (ACC's sitemap did exactly that).
+func TestSitemapIndexerBotChallenge(t *testing.T) {
+	const challenge = `<html>
+<head>
+<META NAME="robots" CONTENT="noindex,nofollow">
+<script src="/_Incapsula_Resource?SWJIYLWA=abc">
+</script>
+<body>
+</body></html>`
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sitemap.xml" {
+			fmt.Fprintf(w, `<?xml version="1.0"?><sitemapindex><sitemap><loc>%s/sitemap.xml/sitemap/1</loc></sitemap></sitemapindex>`, srv.URL)
+			return
+		}
+		_, _ = w.Write([]byte(challenge))
+	}))
+	defer srv.Close()
+
+	_, err := sitemapIndexer(srv.URL, "/news/", 0)(context.Background(), NewFetcher())
+	if !errors.Is(err, ErrBotChallenge) {
+		t.Fatalf("want ErrBotChallenge, got %v", err)
+	}
+	if IsBotChallenge(`<urlset><url><loc>https://x/news/a</loc></url></urlset>`) {
+		t.Error("plain sitemap misdetected as challenge")
 	}
 }
