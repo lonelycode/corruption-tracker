@@ -145,3 +145,35 @@ func TestResolvePeriod(t *testing.T) {
 		}
 	}
 }
+
+// The schedule fires in NZ local time while the container clock is UTC:
+// periods must resolve in the schedule zone.
+func TestResolvePeriodInScheduleZone(t *testing.T) {
+	t.Setenv("TRACKER_TIMEZONE", "")
+	loc := cmd{d: stubDeps(nil)}.reportLocation()
+	if loc.String() != "Pacific/Auckland" {
+		t.Fatalf("default zone = %s", loc)
+	}
+	for _, tc := range []struct{ utc, period, want string }{
+		// 07:30 NZDT 1 Oct 2026 == 18:30Z 30 Sep: the quarter that closed is Q3.
+		{"2026-09-30T18:30:00Z", "last-quarter", "2026-Q3"},
+		// 07:30 NZDT 1 Jan 2027 == 18:30Z 31 Dec 2026.
+		{"2026-12-31T18:30:00Z", "last-quarter", "2026-Q4"},
+		// Monday 06:30 NZDT 2 Nov == Sunday 17:30Z 1 Nov: W44 just closed.
+		{"2026-11-01T17:30:00Z", "", "2026-W44"},
+		// 07:45 NZDT 2 Jan 2027 (annual).
+		{"2027-01-01T18:45:00Z", "last-year", "2026"},
+	} {
+		now, err := time.Parse(time.RFC3339, tc.utc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := resolvePeriod(tc.period, now.In(loc)); got != tc.want {
+			t.Errorf("resolvePeriod(%q, %s in %s) = %q, want %q", tc.period, tc.utc, loc, got, tc.want)
+		}
+	}
+	t.Setenv("TRACKER_TIMEZONE", "UTC")
+	if got := (cmd{d: stubDeps(nil)}).reportLocation().String(); got != "UTC" {
+		t.Errorf("TRACKER_TIMEZONE override ignored: %s", got)
+	}
+}

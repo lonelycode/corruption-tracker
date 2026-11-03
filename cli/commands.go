@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	_ "time/tzdata" // period tokens resolve in a named zone, even in minimal images
 
 	"github.com/lonelycode/corruption-tracker/fraudrecode"
 	"github.com/lonelycode/corruption-tracker/fraudreport"
@@ -612,7 +613,7 @@ func (c cmd) snapshotBuild(ctx context.Context, args []string) (rerr error) {
 	if *period == "" {
 		*period = *week
 	}
-	*period = resolvePeriod(*period, time.Now().UTC())
+	*period = resolvePeriod(*period, time.Now().In(c.reportLocation()))
 
 	conn, err := c.open(ctx)
 	if err != nil {
@@ -639,6 +640,34 @@ func (c cmd) snapshotBuild(ctx context.Context, args []string) (rerr error) {
 		"verified_only", payload.VerifiedOnly)
 	return nil
 }
+
+// reportLocation is the zone the period tokens resolve in: the operator's
+// schedule zone (settings that implement Timezone, e.g. TRACKER_TIMEZONE in
+// standalone), else $TRACKER_TIMEZONE, else Pacific/Auckland. It must match
+// the zone the jobs fire in. Resolving in UTC (as before) fired the 07:30
+// NZ quarterly job on 1 Oct while UTC was still 30 Sep, so it built Q2
+// instead of Q3 and would never have built Q4; the Monday weekly job built
+// the week before last.
+func (c cmd) reportLocation() *time.Location {
+	if ts, ok := c.d.Settings.(interface{ Timezone() *time.Location }); ok {
+		if loc := ts.Timezone(); loc != nil {
+			return loc
+		}
+	}
+	if name := os.Getenv("TRACKER_TIMEZONE"); name != "" {
+		if loc, err := time.LoadLocation(name); err == nil {
+			return loc
+		}
+	}
+	if loc, err := time.LoadLocation(defaultReportTimezone); err == nil {
+		return loc
+	}
+	return time.UTC
+}
+
+// defaultReportTimezone mirrors scheduler.DefaultTimezone (scheduler
+// imports cli, so cli cannot import it).
+const defaultReportTimezone = "Pacific/Auckland"
 
 // resolvePeriod expands the scheduler-friendly tokens (a schedule can't
 // compute dates): "" is the ISO week that just closed, "last-quarter" and
